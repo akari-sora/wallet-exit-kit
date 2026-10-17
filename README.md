@@ -1,12 +1,46 @@
 # wallet-exit-kit
 
-Read-only toolkit and agent skills for preparing to leave DeFi positions. It reads chain data and writes check cards. The user always signs in their own wallet. Nothing here holds keys, signs, or broadcasts.
+- **What it is:** a read-only CLI (`exitkit`) and agent skills for preparing to leave DeFi positions on multiple EVM chains. It reads chain data and writes check cards: asset and approval lists, revoke and exit checklists. It does not hold private keys, does not sign on your behalf, and does not broadcast.
+- **Who it is for:** people who want to review an exit before they sign it in their own wallet, and the AI agents that help them (Claude Code, Codex, Cursor, Hermes, Grok).
+- **How to start:** [Quick start](#quick-start): download from GitLab Releases, check `SHA256SUMS`, run `exitkit --help`.
 
-GitLab is the canonical repository: https://gitlab.com/aa22396584/wallet-exit-kit . Issues and merge requests go there. A GitHub mirror may exist; it is not the place for issues or merge requests.
+GitLab is the canonical repository: https://gitlab.com/aa22396584/wallet-exit-kit . Issues and merge requests go there. Releases and downloads: https://gitlab.com/aa22396584/wallet-exit-kit/-/releases . A GitHub mirror may exist; it is not the place for issues or merge requests.
+
+![wallet-exit-kit overview (English)](docs/img/promo-en.png)
+
+![wallet-exit-kit 介紹（中文）](docs/img/promo-zh.png)
+
+Read-only toolkit and agent skills for preparing to leave DeFi positions. It reads chain data and writes check cards. The user always signs in their own wallet. Nothing here holds keys, signs, or broadcasts.
 
 License: AGPL-3.0-only.
 
 Chinese notes: [docs/zh-TW.md](docs/zh-TW.md).
+
+## Quick start
+
+Download only from GitLab Releases: https://gitlab.com/aa22396584/wallet-exit-kit/-/releases . This README does not install from a package index.
+
+**1. Download.** Put `SHA256SUMS` and every file it lists in one empty directory. The file names below are placeholders (`wallet-exit-kit-<version>.tar.gz`). Use the names in that release's `SHA256SUMS`.
+
+**2. Verify.** Run one of these lines in that directory: the first on Linux, the second on macOS. A missing file or a mismatch fails. Do not install a file that fails.
+
+```bash
+sha256sum -c SHA256SUMS
+shasum -a 256 -c SHA256SUMS
+```
+
+**3. Install and look around.** Unpack the archive, change into the unpacked directory, and install into a virtual environment. `exitkit install` with no flags is a dry-run: it prints the skill install plan and writes nothing.
+
+```bash
+tar -xzf wallet-exit-kit-<version>.tar.gz
+cd wallet-exit-kit-<version>
+python3 -m venv .venv
+.venv/bin/pip install -e .
+.venv/bin/exitkit --help
+.venv/bin/exitkit install
+```
+
+If the Releases page has no release with a `SHA256SUMS` file, there is nothing to verify. In that case install from a GitLab checkout as in [Install the CLI](#install-the-cli). Before you use a card, read [Read-only, no signing, no sending](#read-only-no-signing-no-sending) and [Known limitations](#known-limitations).
 
 ## Read-only, no signing, no sending
 

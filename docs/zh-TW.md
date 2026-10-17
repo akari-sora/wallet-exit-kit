@@ -1,8 +1,40 @@
 # wallet-exit-kit（繁體中文）
 
+- **是什麼：** 只讀的 CLI（`exitkit`）和 agent skill，用來準備離開多條 EVM 鏈上的 DeFi 部位：盤點資產和授權，寫撤授權卡和退場核對卡。不持有私鑰，不代你簽名，不廣播。
+- **給誰用：** 想在自己錢包簽名之前先看清楚退場步驟的人，以及幫他們的 AI agent（Claude Code、Codex、Cursor、Hermes、Grok）。
+- **怎麼開始：** 看下方「快速開始」：從 GitLab Releases 下載，用 `SHA256SUMS` 核對，執行 `exitkit --help`。
+
+GitLab 是主版本：https://gitlab.com/aa22396584/wallet-exit-kit 。Issue 和 merge request 請開在 GitLab。Releases 和下載：https://gitlab.com/aa22396584/wallet-exit-kit/-/releases 。若有 GitHub 鏡像，那不是討論和合併的地方。
+
+![wallet-exit-kit 介紹（中文）](img/promo-zh.png)
+
 這是一份只讀的工具和 agent skill，用來準備離開 DeFi 部位：讀鏈上資料、整理授權、寫退場前要核對的步驟卡。簽名和送出永遠在使用者自己的錢包裡完成。這個套件不保管金鑰、不簽名、不廣播。
 
-GitLab 是主版本：https://gitlab.com/aa22396584/wallet-exit-kit 。Issue 和 merge request 請開在 GitLab。若有 GitHub 鏡像，那不是討論和合併的地方。
+## 快速開始
+
+只從 GitLab Releases 下載：https://gitlab.com/aa22396584/wallet-exit-kit/-/releases 。這份說明不從套件索引安裝。
+
+**1. 下載。** 把 `SHA256SUMS` 和它列出的每一個檔案放進同一個空目錄。下面的檔名是佔位字（`wallet-exit-kit-<version>.tar.gz`），請換成那一版 `SHA256SUMS` 裡的名稱。
+
+**2. 核對雜湊。** 第一行用在 Linux，第二行用在 macOS。缺檔或雜湊不符都會失敗；失敗就不要安裝。
+
+```bash
+sha256sum -c SHA256SUMS
+shasum -a 256 -c SHA256SUMS
+```
+
+**3. 安裝並看一下。** 解開壓縮檔，進入解開的目錄，裝進虛擬環境。`exitkit install` 不加參數是 dry-run，只印出 skill 安裝計畫，不寫檔。
+
+```bash
+tar -xzf wallet-exit-kit-<version>.tar.gz
+cd wallet-exit-kit-<version>
+python3 -m venv .venv
+.venv/bin/pip install -e .
+.venv/bin/exitkit --help
+.venv/bin/exitkit install
+```
+
+Releases 頁面上如果還沒有帶 `SHA256SUMS` 的版本，就沒有東西可以核對。這時改用 GitLab checkout，照下方「安裝 CLI」安裝。使用任何一張卡之前，先讀「只讀、不簽、不送」和「已知限制」。
 
 授權：AGPL-3.0-only。
 
