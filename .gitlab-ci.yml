@@ -1,0 +1,18 @@
+# GitLab is the canonical CI. This project does not use GitHub Actions.
+
+default:
+  image: python:3.12
+
+variables:
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  PIP_ROOT_USER_ACTION: "ignore"
+
+stages:
+  - test
+
+test:
+  stage: test
+  script:
+    - python -m pip install --no-cache-dir -e ".[dev]"
+    - pytest -q
+    - exitkit audit .
