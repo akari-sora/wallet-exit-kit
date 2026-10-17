@@ -13,7 +13,10 @@ def _frontmatter(path: Path) -> list[str]:
 
 
 def test_frontmatter_values_are_safe_yaml_scalars():
-    skills = sorted(ROOT.glob("skills/*/SKILL.md"))
+    skills = sorted({
+        *ROOT.glob("skills/*/SKILL.md"),
+        *ROOT.glob("templates/**/skills/**/SKILL.md"),
+    })
     assert skills
     for path in skills:
         keys = {}
