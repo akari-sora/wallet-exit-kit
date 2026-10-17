@@ -132,7 +132,7 @@ def test_grok_dry_run_does_not_write(tmp_path, capsys, monkeypatch):
 def test_grok_apply_inlines_references(tmp_path, capsys):
     out = tmp_path / "grok.md"
     code = install_main([
-        "--target", "grok", "--apply", "--skill", "onchain-exit-assist", "--output", str(out),
+        "--target", "grok", "--apply", "--skill", "onchain-exit-assist", "--home", str(tmp_path), "--output", str(out),
     ])
     assert code == 0
     capsys.readouterr()
@@ -300,7 +300,7 @@ def test_grok_apply_refuses_to_overwrite_without_force(tmp_path, capsys):
     out = tmp_path / "grok.md"
     out.write_text("keep", encoding="utf-8")
     code = install_main([
-        "--target", "grok", "--apply", "--skill", "onchain-exit-assist", "--output", str(out),
+        "--target", "grok", "--apply", "--skill", "onchain-exit-assist", "--home", str(tmp_path), "--output", str(out),
     ])
     assert code == 2
     assert out.read_text(encoding="utf-8") == "keep"
@@ -313,7 +313,7 @@ def test_grok_apply_force_backs_up_the_existing_file(tmp_path, capsys):
     out = tmp_path / "grok.md"
     out.write_text("keep", encoding="utf-8")
     code = install_main([
-        "--target", "grok", "--apply", "--force", "--skill", "onchain-exit-assist", "--output", str(out),
+        "--target", "grok", "--apply", "--force", "--skill", "onchain-exit-assist", "--home", str(tmp_path), "--output", str(out),
     ])
     assert code == 0, capsys.readouterr().out
     assert "name: onchain-exit-assist" in out.read_text(encoding="utf-8")
@@ -328,7 +328,7 @@ def test_grok_apply_refuses_a_symlink(tmp_path, capsys):
     out = tmp_path / "link.md"
     out.symlink_to(target)
     code = install_main([
-        "--target", "grok", "--apply", "--force", "--skill", "onchain-exit-assist", "--output", str(out),
+        "--target", "grok", "--apply", "--force", "--skill", "onchain-exit-assist", "--home", str(tmp_path), "--output", str(out),
     ])
     assert code == 2
     err = json.loads(capsys.readouterr().out)
@@ -342,9 +342,56 @@ def test_grok_apply_refuses_a_symlink(tmp_path, capsys):
 def test_grok_apply_does_not_create_parent_directories(tmp_path, capsys):
     out = tmp_path / "missing" / "grok.md"
     code = install_main([
-        "--target", "grok", "--apply", "--skill", "onchain-exit-assist", "--output", str(out),
+        "--target", "grok", "--apply", "--skill", "onchain-exit-assist", "--home", str(tmp_path), "--output", str(out),
     ])
     assert code == 2
     assert not (tmp_path / "missing").exists()
     err = json.loads(capsys.readouterr().out)
     assert "parent" in err["error"]
+
+
+def _grok(tmp_path, home, out, *extra):
+    return install_main([
+        "--target", "grok", "--apply", *extra, "--skill", "onchain-exit-assist",
+        "--home", str(home), "--output", str(out),
+    ])
+
+
+def test_grok_output_outside_home_is_refused(tmp_path, capsys):
+    home = tmp_path / "home"
+    home.mkdir()
+    out = tmp_path / "outside.md"
+    assert _grok(tmp_path, home, out) == 2
+    assert "inside HOME" in json.loads(capsys.readouterr().out)["error"]
+    assert not out.exists()
+
+
+def test_grok_output_force_outside_home_leaves_the_file(tmp_path, capsys):
+    home = tmp_path / "home"
+    home.mkdir()
+    out = tmp_path / "victim.md"
+    out.write_text("keep", encoding="utf-8")
+    assert _grok(tmp_path, home, out, "--force") == 2
+    assert out.read_text(encoding="utf-8") == "keep"
+    assert not list(tmp_path.glob("victim.md.exitkit-bak-*"))
+
+
+def test_grok_output_through_a_symlinked_parent_is_refused(tmp_path, capsys):
+    home = tmp_path / "home"
+    home.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (home / "link").symlink_to(outside)
+    out = home / "link" / "grok.md"
+    assert _grok(tmp_path, home, out) == 2
+    assert "symlink" in json.loads(capsys.readouterr().out)["error"]
+    assert not (outside / "grok.md").exists()
+
+
+def test_grok_output_must_be_a_visible_md_file(tmp_path, capsys):
+    for name in (".zshrc", "notes.txt", ".hidden.md"):
+        target = tmp_path / name
+        target.write_text("keep", encoding="utf-8")
+        assert _grok(tmp_path, tmp_path, target, "--force") == 2
+        assert target.read_text(encoding="utf-8") == "keep"
+    capsys.readouterr()

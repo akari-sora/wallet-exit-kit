@@ -280,23 +280,33 @@ def _parse(argv: list[str] | None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def _write_grok(dest: Path, text: str, force: bool) -> None:
-    """Write the grok markdown. Never follow a symlink and never create parent directories."""
+def _write_grok(dest: Path, text: str, force: bool, home: Path) -> None:
+    """Write the grok markdown inside HOME. Never follow a symlink, never create parent
+    directories, and never replace anything but a .md file (backed up first with --force)."""
     if not dest.is_absolute():
         raise ValueError("pass an absolute --output path")
+    if dest.suffix != ".md" or dest.name.startswith("."):
+        raise ValueError("--output must be a visible .md file")
     if os.path.islink(dest):
         raise ValueError("refusing to write through a symlink")
+    try:
+        parent = dest.parent.resolve(strict=True)
+    except (OSError, RuntimeError):
+        raise ValueError("--output parent directory does not exist") from None
+    if Path(os.path.abspath(dest.parent)) != parent:
+        raise ValueError("refusing an --output path that goes through a symlink")
+    if not parent.is_dir():
+        raise ValueError("--output parent directory does not exist")
+    if parent != home and home not in parent.parents:
+        raise ValueError("--output must be inside HOME")
     if dest.exists() and dest.is_dir():
         raise ValueError("--output is a directory")
     if os.path.lexists(dest) and not force:
         raise ValueError("refusing to overwrite; pass --force")
     if os.path.lexists(dest):
         _backup(dest)
-    if os.path.lexists(dest):
-        raise ValueError("refusing to overwrite")
-    if not dest.parent.is_dir():
-        raise ValueError("--output parent directory does not exist")
-    dest.write_text(text, encoding="utf-8")
+    with open(dest, "x", encoding="utf-8") as handle:
+        handle.write(text)
 
 
 def _run(args: argparse.Namespace) -> int:
@@ -310,7 +320,7 @@ def _run(args: argparse.Namespace) -> int:
     if "grok" in targets and args.apply and not args.output and targets != ["grok"]:
         raise ValueError("pass --output when combining grok with other targets")
     fs_targets = [target for target in targets if target != "grok"]
-    home = resolve_home(args.home) if fs_targets else None
+    home = resolve_home(args.home) if (fs_targets or (args.output and args.apply)) else None
 
     actions: list[dict] = []
     wrote = False
@@ -328,7 +338,7 @@ def _run(args: argparse.Namespace) -> int:
         if args.apply:
             text = render_grok(skills)
             if args.output:
-                _write_grok(Path(args.output), text, bool(args.force))
+                _write_grok(Path(args.output), text, bool(args.force), home)
                 wrote = True
             elif targets == ["grok"]:
                 sys.stdout.write(text)
