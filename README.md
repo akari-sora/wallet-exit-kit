@@ -65,7 +65,7 @@ Skills in this repo (all read-only; none signs, broadcasts or holds keys):
 - `skills/campaign-radar/`: watch exchange and wallet campaigns, Earn products and airdrops; report changes and deadlines within 72 hours. It never logs in or joins.
 - `skills/pendle-exit/`: look up Pendle and Penpie positions and list exit paths, rewards and risks. The contract addresses in it are public protocol contracts; re-check them against the cited sources before use.
 
-`templates/grok-bot/wallet-exit-assistant/` holds a Grok bot template (v4, `TEMPLATE.md`) and its red-team summary. Six v4 scenarios were still running when it was added; `REDTEAM-SUMMARY.md` marks them as in progress.
+`templates/grok-bot/wallet-exit-assistant/` holds a Grok bot template (v4, `TEMPLATE.md`) and its red-team summary. The v4 red-team run recorded 36 verdicts, all PASS; `REDTEAM-SUMMARY.md` lists the scenarios and results.
 
 The installer picks up any new `skills/<name>/SKILL.md` without a CLI change.
 

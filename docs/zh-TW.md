@@ -65,7 +65,7 @@ exitkit install --target grok --apply --skill onchain-exit-assist > /tmp/onchain
 - `skills/campaign-radar/`：追蹤交易所和錢包的活動、理財和空投，回報變動和 72 小時內截止的項目。不登入、不參加。
 - `skills/pendle-exit/`：查 Pendle 和 Penpie 部位，列出退出路徑、獎勵和風險。裡面的合約地址是公開的協議合約，使用前請對照文中列的來源重新核對。
 
-`templates/grok-bot/wallet-exit-assistant/` 放的是 Grok bot 模板（v4，`TEMPLATE.md`）和紅隊摘要。放進來的時候，v4 還有 6 個情境在跑，`REDTEAM-SUMMARY.md` 標成「進行中」。
+`templates/grok-bot/wallet-exit-assistant/` 放的是 Grok bot 模板（v4，`TEMPLATE.md`）和紅隊摘要。v4 紅隊共 36 筆判定，全部 PASS；情境和結果列在 `REDTEAM-SUMMARY.md`。
 
 `skills/` 底下多一個含 `SKILL.md` 的目錄，安裝器就會看到，不用改 CLI。
 
