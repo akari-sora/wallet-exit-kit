@@ -6,10 +6,6 @@
 
 GitLab is the canonical repository: https://gitlab.com/aa22396584/wallet-exit-kit . Issues and merge requests go there. Releases and downloads: https://gitlab.com/aa22396584/wallet-exit-kit/-/releases . A GitHub mirror may exist; it is not the place for issues or merge requests.
 
-![wallet-exit-kit overview (English)](docs/img/promo-en.png)
-
-![wallet-exit-kit 介紹（中文）](docs/img/promo-zh.png)
-
 Read-only toolkit and agent skills for preparing to leave DeFi positions. It reads chain data and writes check cards. The user always signs in their own wallet. Nothing here holds keys, signs, or broadcasts.
 
 License: AGPL-3.0-only.
@@ -18,9 +14,9 @@ Chinese notes: [docs/zh-TW.md](docs/zh-TW.md).
 
 ## Quick start
 
-Download only from GitLab Releases: https://gitlab.com/aa22396584/wallet-exit-kit/-/releases . This README does not install from a package index.
+Download only from GitLab Releases: https://gitlab.com/aa22396584/wallet-exit-kit/-/releases . The package itself is not installed from a package index (pip still downloads its build tool, setuptools, from PyPI). Needs Python 3.12 or newer.
 
-**1. Download.** Put `SHA256SUMS` and every file it lists in one empty directory. The file names below are placeholders (`wallet-exit-kit-<version>.tar.gz`). Use the names in that release's `SHA256SUMS`.
+**1. Download.** Put `SHA256SUMS` and every file it lists in one empty directory. The file names below are placeholders (`wallet-exit-kit-<version>.tar.gz`). Use the names in that release's `SHA256SUMS`. The archive is the full source tree (skills, templates and docs included), not a Python sdist.
 
 **2. Verify.** Run one of these lines in that directory: the first on Linux, the second on macOS. A missing file or a mismatch fails. Do not install a file that fails.
 
@@ -40,7 +36,7 @@ python3 -m venv .venv
 .venv/bin/exitkit install
 ```
 
-If the Releases page has no release with a `SHA256SUMS` file, there is nothing to verify. In that case install from a GitLab checkout as in [Install the CLI](#install-the-cli). Before you use a card, read [Read-only, no signing, no sending](#read-only-no-signing-no-sending) and [Known limitations](#known-limitations).
+If the Releases page has no release with a `SHA256SUMS` file, there is nothing to verify. In that case install from a GitLab checkout (`git clone https://gitlab.com/aa22396584/wallet-exit-kit.git`, then the same venv steps inside it), as in [Install the CLI](#install-the-cli). Before you use a card, read [Read-only, no signing, no sending](#read-only-no-signing-no-sending) and [Known limitations](#known-limitations).
 
 ## Read-only, no signing, no sending
 
