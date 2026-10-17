@@ -8,7 +8,8 @@ What it finds (each hit is PUBLIC / FAKE / REVIEW):
 - Boundary rule: an allowlisted / public / fake address only counts as such when no hex char is
   directly before (or before its 0x) or after it; otherwise the whole combined run is REVIEW.
 - 64-hex strings (tx hash, private key, signature part): allowed only if in KNOWN_64 (public
-  event topics / storage slots listed in references/07) or an obvious placeholder.
+  event topics / storage slots listed in references/07, and published release file hashes)
+  or an obvious placeholder.
 - Other hex runs longer than 40 that are not 64: REVIEW (may hide an address).
 - Non-EVM / identity formats: Bitcoin bech32 (bc1…), TRON (T…), base58 (Solana/BTC legacy),
   ENS names (*.eth), email, social handles (at-sign + name), home/internal paths.
@@ -54,7 +55,7 @@ PUBLIC = {
     "8ce523cf1120d9b7703806c745b69663a2847504": "Penpie penpieBribeRewardDistributor (Arbitrum)",
     "888888888889758f76e7103c6cbf23abbf58f946": "Pendle RouterV4",
 }
-KNOWN_64 = {  # public keccak constants (references/07)
+KNOWN_64 = {  # public keccak constants (references/07) and published release file hashes
     "ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef": "Transfer",
     "8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925": "Approval",
     "17307eab39ab6107e8899845ad3d59bd9653f200f220920489ca2b5937696c31": "ApprovalForAll",
