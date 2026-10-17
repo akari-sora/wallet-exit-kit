@@ -1,6 +1,6 @@
 ---
 name: onchain-exit-assist
-description: 當使用者想盤點錢包在多條 EVM 鏈上的資產與授權、撤銷危險授權、把部位退場或搬到指定目的地、或要盯協議關閉／還款窗口期限時使用。只讀鏈與本機模擬，不簽名、不廣播；產出讓使用者自己在錢包核對、自己簽的步驟卡。Keywords: wallet exit, revoke approvals, asset scan, withdraw, bridge, deadline monitor, EVM multi-chain.
+description: "當使用者想盤點錢包在多條 EVM 鏈上的資產與授權、撤銷危險授權、把部位退場或搬到指定目的地、或要盯協議關閉／還款窗口期限時使用。只讀鏈與本機模擬，不簽名、不廣播；產出讓使用者自己在錢包核對、自己簽的步驟卡。Keywords: wallet exit, revoke approvals, asset scan, withdraw, bridge, deadline monitor, EVM multi-chain."
 ---
 
 # onchain-exit-assist：多鏈盤點、撤授權、退場核對卡
