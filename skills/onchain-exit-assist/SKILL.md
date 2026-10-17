@@ -67,6 +67,8 @@ description: 當使用者想盤點錢包在多條 EVM 鏈上的資產與授權�
 
 ## 輔助腳本（Python 標準庫；不簽名、不廣播）
 
+這些指令需要已安裝的 `exitkit` 套件。在這個倉庫執行 `pip install -e .`，或安裝已發佈的套件（`wallet-exit-kit`）。只複製或連結 `skills/onchain-exit-assist` 不夠：`scripts/` 裡的包裝會 `import exitkit`。確認方式：`python -c "import exitkit"` 沒有錯誤，而且 `exitkit --help` 列得出 `rpc`、`logs`、`simulate`、`decode`、`audit`、`disclose`、`install`。
+
 | 檔案 | 用途 | 會寫檔或連網嗎 |
 |---|---|---|
 | `exitkit rpc` | JSON-RPC 客戶端：讀取方法白名單（預設拒絕）、chainId 必填且每個 URL 用前核對、429 退避有次數和時間上限、記錄實際用的 host、`disclosure()` 依實際送出內容列出每個 host 收到什麼（完整錢包地址／只有合約地址／只有區塊號）、可用 `allowed_hosts` 限制主機；Multicall3 沒部署或結果數不符＝全部未知 | 只連你給的 RPC；沒有預設 URL |

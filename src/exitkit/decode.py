@@ -102,6 +102,31 @@ def classify_personal(msg_hex, expect_chain_id=None):
             "check": ["only if user can explain every word and it grants nothing"]}
 
 
+def _typed_labels(td, primary_type, message_keys):
+    """Type names and field names only. Message values are not labels.
+
+    A number or string that happens to contain "7702" must not mark the
+    request as EIP-7702. The decision for that request stays REJECT via
+    the categories below; only the label changes.
+    """
+    parts = [primary_type]
+    types = td.get("types")
+    if isinstance(types, dict):
+        for name, fields in types.items():
+            parts.append(str(name))
+            if not isinstance(fields, list):
+                continue
+            for field in fields:
+                if not isinstance(field, dict):
+                    continue
+                if "name" in field:
+                    parts.append(str(field["name"]))
+                if "type" in field:
+                    parts.append(str(field["type"]))
+    parts.extend(str(key) for key in message_keys)
+    return " ".join(parts).lower()
+
+
 def classify_typed(td):
     if isinstance(td, str):
         td = json.loads(td)
@@ -127,11 +152,12 @@ def classify_typed(td):
     if pt == "Permit" and {"holder", "spender", "allowed"} <= keys:
         return {**base, "category": "DAI-STYLE PERMIT (token allowance)", "decision": "REJECT",
                 "why": "off-chain approve (allowed=true is unlimited)", "check": ["spender", "allowed", "expiry"]}
-    blob = json.dumps(td).lower()
-    low = pt.lower() + " " + " ".join((td.get("types", {}) or {}).keys()).lower()
-    if "authorization" in low or "7702" in blob:
+    labels = _typed_labels(td, pt, keys)
+    if "authorization" in labels or "7702" in labels:
         return {**base, "category": "ACCOUNT UPGRADE / EIP-7702 / AUTHORIZATION", "decision": "REJECT",
                 "why": "never delegate or upgrade the account"}
+    type_names = (td.get("types", {}) or {})
+    low = pt.lower() + " " + " ".join(type_names.keys()).lower() if isinstance(type_names, dict) else pt.lower()
     if any(h in low for h in ORDER_HINTS):
         return {**base, "category": "ORDER / TRADE", "decision": "REJECT",
                 "why": "can move assets when someone fills it", "check": ["offer/consideration", "amounts", "recipient", "expiry"]}

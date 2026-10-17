@@ -22,7 +22,7 @@ GitLab 是主版本：https://gitlab.com/aa22396584/wallet-exit-kit 。Issue 和
 
 ## 安裝 CLI
 
-需要 Python 3.12 以上。工具本身只用標準庫。這個專案的安裝會一併裝上 pytest，方便跑下面的測試。
+需要 Python 3.12 以上。工具本身只用標準庫。pytest 只在 `dev` extra，不是執行時依賴。
 
 ```bash
 python3 -m venv .venv
@@ -30,11 +30,11 @@ python3 -m venv .venv
 .venv/bin/exitkit --help
 ```
 
-請在這個倉庫的工作目錄執行。`exitkit install` 會從套件位置和目前目錄往上找 `skills/`。
+`exitkit install` 從已安裝套件的位置往上找這個倉庫，不看目前目錄。找不到時，用 `--repo` 傳這個倉庫的絕對路徑。
 
 ## 把 skill 裝進各個 agent
 
-`skills/<名稱>/SKILL.md` 就是一個 skill。`exitkit install` 預設是 dry-run，只印出計畫，不寫檔。加上 `--apply` 才寫入。預設用 symlink 指回這個倉庫裡的 skill 目錄；`--copy` 才複製檔案。已經存在的同名目錄不會被蓋掉。`--force` 會先把舊目錄改名成 `<名稱>.exitkit-bak-<UTC時間>`，再安裝。
+`skills/<名稱>/SKILL.md` 就是一個 skill。`exitkit install` 預設是 dry-run，只印出計畫，不寫檔。加上 `--apply` 才寫入。預設用 symlink 指回這個倉庫裡的 skill 目錄；`--copy` 才複製檔案，來源裡如果有 symlink 就拒絕。已經存在的同名目錄或 symlink 不會被蓋掉。`--force` 會先把該路徑改名成 `<名稱>.exitkit-bak-<UTC時間>`，再安裝。目的地如果已是 symlink，改名的是連結本身，不會搬走它指向的目錄。
 
 | `--target` | 目的地 |
 |---|---|
@@ -54,10 +54,10 @@ exitkit install --apply --target cursor --skill onchain-exit-assist
 exitkit install --apply --copy --target codex
 exitkit install --apply --force --target hermes --skill onchain-exit-assist
 exitkit install --target grok --skill onchain-exit-assist
-exitkit install --target grok --apply --skill onchain-exit-assist > /tmp/onchain-exit-assist.md
+exitkit install --target grok --apply --skill onchain-exit-assist > "$HOME/onchain-exit-assist.md"
 ```
 
-`grok` 的 dry-run 印 JSON 計畫。`--apply` 且沒有 `--output` 時，Markdown 印在標準輸出。`--output` 要給絕對路徑。
+`grok` 的 dry-run 印 JSON 計畫。`--apply` 且沒有 `--output` 時，Markdown 印在標準輸出。`--output` 要給絕對路徑，上層目錄必須已經存在。已有的檔案不會被蓋掉，除非加上 `--force`（先把舊檔改名）。路徑上若是 symlink 就拒絕。這個檔案寫在自己的家目錄，不要寫進共用的暫存目錄。
 
 這個 repo 裡的 skill（全部只讀，不簽名、不廣播、不碰金鑰）：
 
@@ -65,7 +65,7 @@ exitkit install --target grok --apply --skill onchain-exit-assist > /tmp/onchain
 - `skills/campaign-radar/`：追蹤交易所和錢包的活動、理財和空投，回報變動和 72 小時內截止的項目。不登入、不參加。
 - `skills/pendle-exit/`：查 Pendle 和 Penpie 部位，列出退出路徑、獎勵和風險。裡面的合約地址是公開的協議合約，使用前請對照文中列的來源重新核對。
 
-`templates/grok-bot/wallet-exit-assistant/` 放的是 Grok bot 模板（v4，`TEMPLATE.md`）和紅隊摘要。v4 紅隊共 36 筆判定，全部 PASS；情境和結果列在 `REDTEAM-SUMMARY.md`。
+`templates/grok-bot/wallet-exit-assistant/` 放的是 Grok bot 模板（v4.1，`TEMPLATE.md`）和紅隊摘要。v4 紅隊共 36 筆判定全部 PASS；v4.1 重跑了改動到的 3 個情境，也都 PASS。情境和結果列在 `REDTEAM-SUMMARY.md`。
 
 `skills/` 底下多一個含 `SKILL.md` 的目錄，安裝器就會看到，不用改 CLI。
 
@@ -163,7 +163,7 @@ exitkit disclose render --log "$TMP/disclosure.jsonl" --wallet-site "app.example
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install -e .
+.venv/bin/pip install -e ".[dev]"
 .venv/bin/pytest -q
 .venv/bin/exitkit audit .
 ```

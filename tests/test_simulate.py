@@ -187,3 +187,15 @@ def test_simulate_cli_passes_against_a_local_node(serve_rpc, tmp_path, capsys):
     assert "eth_simulateV1" in seen
     for method in ("eth_sign", "eth_sendTransaction", "personal_sign", "wallet_sendCalls"):
         assert method not in seen
+
+
+def test_simulate_help_and_unreadable_spec(capsys, tmp_path):
+    assert simulate_main(["--help"]) == 0
+    assert "usage" in capsys.readouterr().out.lower()
+    missing = tmp_path / "missing" / "spec.json"
+    assert simulate_main([str(missing)]) == 1
+    assert "cannot read spec" in capsys.readouterr().err
+    bad = tmp_path / "bad.json"
+    bad.write_text("{", encoding="utf-8")
+    assert simulate_main([str(bad)]) == 1
+    assert "not JSON" in capsys.readouterr().err

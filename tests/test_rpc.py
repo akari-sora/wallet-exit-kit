@@ -136,6 +136,29 @@ def test_refused_methods_never_leave_the_process(serve_rpc):
     assert seen == ["eth_chainId"]
 
 
+def test_case_variant_keys_never_reach_the_server(serve_rpc):
+    seen = []
+
+    def chain(req):
+        return jsonrpc_ok(req, "0x1")
+
+    url = serve_rpc(routed({"eth_chainId": chain}, seen))
+    rpc = RPC([url], expect_chain_id=1, retries=0, timeout=2, max_total_secs=5)
+    assert seen == ["eth_chainId"]
+    bodies = [
+        b'{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[],"METHOD":"eth_sendRawTransaction","PARAMS":["0x02"]}',
+        b'{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[],"Method":"eth_sendRawTransaction"}',
+        b'[{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]},{"jsonrpc":"2.0","id":2,"method":"eth_blockNumber","params":[],"METHOD":"eth_sendRawTransaction"}]',
+        b'{"jsonrpc":"2.0","id":1,"method":"eth_call","params":[{"Method":"eth_sendRawTransaction","params":["0x02"]}]}',
+    ]
+    for raw in bodies:
+        with pytest.raises(RPCError, match="refused"):
+            rpc._transport(url, raw)
+    assert seen == ["eth_chainId"]
+    for forbidden in ("eth_sendRawTransaction", "eth_sign", "personal_sign"):
+        assert forbidden not in seen
+
+
 def test_chain_id_mismatch_does_not_send_the_read(serve_rpc):
     seen = []
 
@@ -194,3 +217,47 @@ def test_rpc_cli_demo_stays_on_the_allowlist(serve_rpc, capsys):
     assert seen
     for method in ("eth_sign", "personal_sign", "eth_sendTransaction", "wallet_sendCalls"):
         assert method not in seen
+
+
+def test_http_redirect_is_refused(serve_rpc):
+    import threading
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    seen = []
+
+    class Handler(BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.1"
+
+        def do_POST(self):
+            n = int(self.headers.get("Content-Length", "0"))
+            body = json.loads(self.rfile.read(n).decode())
+            seen.append(body.get("method"))
+            if body.get("method") == "eth_chainId":
+                data = json.dumps(jsonrpc_ok(body, "0x1")).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+                return
+            self.send_response(302)
+            self.send_header("Location", "http://127.0.0.1:9/not-followed")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
+        def log_message(self, fmt, *args):
+            return
+
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    try:
+        url = f"http://127.0.0.1:{httpd.server_address[1]}"
+        rpc = RPC([url], expect_chain_id=1, retries=0, timeout=2, max_total_secs=5)
+        with pytest.raises(RPCError, match="redirect"):
+            rpc.call("eth_blockNumber", [])
+        assert seen == ["eth_chainId", "eth_blockNumber"]
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        thread.join(timeout=2)

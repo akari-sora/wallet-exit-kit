@@ -99,6 +99,29 @@ def test_decode_cli_reads_a_file(tmp_path, capsys):
     assert "RAW HASH" in out["category"]
 
 
+def test_amount_containing_7702_is_not_labeled_as_delegation():
+    res = classify({
+        "primaryType": "Mail",
+        "domain": {"name": "Example", "chainId": 1},
+        "types": {"Mail": [{"name": "amount", "type": "uint256"}]},
+        "message": {"amount": "7702"},
+    })
+    assert res["decision"] == "REJECT"
+    assert "7702" not in res["category"]
+    assert "UNKNOWN" in res["category"]
+
+
+def test_authorization_type_is_still_rejected_as_eip_7702():
+    res = classify({
+        "primaryType": "Authorization",
+        "domain": {"name": "Example", "chainId": 1},
+        "types": {"Authorization": [{"name": "chainId", "type": "uint256"}]},
+        "message": {"chainId": 1},
+    })
+    assert res["decision"] == "REJECT"
+    assert "EIP-7702" in res["category"]
+
+
 def test_decode_cli_reads_stdin(monkeypatch, capsys):
     monkeypatch.setattr(sys, "stdin", io.StringIO("not-json"))
     assert decode_main([]) == 0

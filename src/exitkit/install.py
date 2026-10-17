@@ -2,11 +2,16 @@
 
 The default is a dry-run that only prints a plan. ``--apply`` writes.
 The default write is a symlink to the skill directory in the checkout.
-``--copy`` copies the tree. An existing destination is left alone unless
-``--force``, which renames it aside first.
+``--copy`` copies the tree and refuses if that tree contains a symlink.
+An existing destination is left alone unless ``--force``, which renames
+that path aside first. A symlink at the destination is renamed as a
+link; the path it points at is not followed or renamed.
 
 ``--target grok`` builds one markdown file with each skill's references
-inlined after SKILL.md, for pasting into a Grok bot.
+inlined after SKILL.md, for pasting into a Grok bot. ``--output`` must
+be an absolute path. An existing file is left alone unless ``--force``.
+A symlink at that path is refused, and missing parent directories are
+not created.
 """
 
 from __future__ import annotations
@@ -35,17 +40,42 @@ def _emit(payload: dict) -> None:
     sys.stdout.write(json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False) + "\n")
 
 
-def repo_root() -> Path:
+def _is_checkout(path: Path) -> bool:
+    manifest = path / "pyproject.toml"
+    if not manifest.is_file() or not (path / "skills").is_dir():
+        return False
+    try:
+        text = manifest.read_text(encoding="utf-8")
+    except OSError:
+        return False
+    return 'name = "wallet-exit-kit"' in text or "name = 'wallet-exit-kit'" in text
+
+
+def repo_root(explicit: str | None = None) -> Path:
+    """This package's checkout, or the absolute ``--repo`` the caller passed.
+
+    The current directory is not a candidate. A checkout next to an
+    unrelated project must not be installed by accident.
+    """
+    if explicit is not None:
+        if not isinstance(explicit, str) or not explicit.strip():
+            raise ValueError("pass an absolute --repo path")
+        raw = Path(explicit)
+        if not raw.is_absolute():
+            raise ValueError("pass an absolute --repo path")
+        root = raw.resolve()
+        if not _is_checkout(root):
+            raise ValueError("pass --repo pointing at a wallet-exit-kit checkout (pyproject.toml and skills/)")
+        return root
     start = Path(__file__).resolve()
     seen: set[Path] = set()
-    candidates = [start.parent, *start.parents, Path.cwd().resolve()]
-    for cand in candidates:
+    for cand in (start.parent, *start.parents):
         if cand in seen:
             continue
         seen.add(cand)
-        if (cand / "pyproject.toml").is_file() and (cand / "skills").is_dir():
+        if _is_checkout(cand):
             return cand
-    raise ValueError("cannot find the wallet-exit-kit checkout (pyproject.toml and skills/)")
+    raise ValueError("cannot find the wallet-exit-kit checkout; pass --repo")
 
 
 def resolve_home(explicit: str | None) -> Path:
@@ -63,33 +93,42 @@ def resolve_home(explicit: str | None) -> Path:
     return home
 
 
-def _under_home(home: Path, path: Path) -> Path:
-    """Resolve ``path`` and refuse a destination that leaves ``home``."""
-    home_r = home.resolve()
-    cursor = path
-    suffix: list[str] = []
-    while not cursor.exists():
-        suffix.append(cursor.name)
-        parent = cursor.parent
-        if parent == cursor:
-            raise ValueError("destination escapes HOME")
-        cursor = parent
-    resolved = cursor.resolve()
-    for name in reversed(suffix):
-        resolved = resolved / name
-    try:
-        resolved.relative_to(home_r)
-    except ValueError as exc:
-        raise ValueError("destination escapes HOME") from exc
-    return resolved
-
-
 def destination(home: Path, target: str, skill: str) -> Path:
+    """Return ``<skills dir>/<name>`` without following the leaf.
+
+    Only the parent is resolved. It must resolve to exactly
+    ``home/<agent skills dir>``. A symlinked ancestor inside ``home``
+    that lands anywhere else is refused. The leaf is appended and left
+    unresolved, so a symlink already installed there stays the
+    destination (and ``--force`` renames that link, not its target).
+    """
     if target not in _REL:
         raise ValueError("unknown target")
     if _SKILL_NAME.fullmatch(skill) is None:
         raise ValueError("unsafe skill name")
-    return _under_home(home, home.joinpath(*_REL[target], skill))
+    home_r = home.resolve()
+    parent = home.joinpath(*_REL[target])
+    expected = home_r.joinpath(*_REL[target])
+    cursor = home
+    expected_cursor = home_r
+    for part in _REL[target]:
+        cursor = cursor / part
+        expected_cursor = expected_cursor / part
+        if not os.path.islink(cursor):
+            continue
+        try:
+            landed = cursor.resolve()
+        except OSError as exc:
+            raise ValueError("destination escapes HOME") from exc
+        if landed != expected_cursor:
+            raise ValueError("destination escapes HOME")
+    try:
+        resolved_parent = parent.resolve()
+    except OSError as exc:
+        raise ValueError("destination escapes HOME") from exc
+    if resolved_parent != expected:
+        raise ValueError("destination escapes HOME")
+    return parent / skill
 
 
 def discover_skills(root: Path, names: list[str] | None) -> list[Path]:
@@ -158,6 +197,16 @@ def render_grok(skills: list[Path]) -> str:
     return "".join(chunks)
 
 
+def _refuse_source_symlinks(skill: Path) -> None:
+    """``--copy`` must not follow a symlink out of the skill tree."""
+    if os.path.islink(skill):
+        raise ValueError("refusing to copy a symlink inside the skill")
+    for dirpath, dirnames, filenames in os.walk(skill, followlinks=False):
+        for name in list(dirnames) + list(filenames):
+            if os.path.islink(os.path.join(dirpath, name)):
+                raise ValueError("refusing to copy a symlink inside the skill")
+
+
 def _backup(dest: Path) -> Path:
     stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     bak = dest.with_name(dest.name + ".exitkit-bak-" + stamp)
@@ -193,6 +242,8 @@ def _install_one(home: Path, skill: Path, target: str, apply: bool, copy: bool, 
     }
     if not apply or (exists and not force):
         return row
+    if copy:
+        _refuse_source_symlinks(skill)
     if exists:
         row["backup"] = _backup(dest).as_posix()
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -215,17 +266,41 @@ def _parse(argv: list[str] | None) -> argparse.Namespace:
         description="Install skills from this checkout. Default is a dry-run.",
     )
     parser.add_argument("--home", default=None, help="install under this HOME (default: $HOME)")
+    parser.add_argument("--repo", default=None, help="wallet-exit-kit checkout; default is this package's repo")
     parser.add_argument("--apply", action="store_true", help="write; without this flag only print the plan")
     parser.add_argument("--copy", action="store_true", help="copy files instead of symlinking")
     parser.add_argument("--force", action="store_true", help="back up an existing skill directory, then replace it")
     parser.add_argument("--target", action="append", choices=(*FS_TARGETS, "grok"), default=None)
     parser.add_argument("--skill", action="append", default=None, help="skill directory name; default is every skill")
-    parser.add_argument("--output", default=None, help="with --target grok --apply, write the single file here")
+    parser.add_argument(
+        "--output",
+        default=None,
+        help="with --target grok --apply, write the single file here (absolute path; existing files need --force)",
+    )
     return parser.parse_args(argv)
 
 
+def _write_grok(dest: Path, text: str, force: bool) -> None:
+    """Write the grok markdown. Never follow a symlink and never create parent directories."""
+    if not dest.is_absolute():
+        raise ValueError("pass an absolute --output path")
+    if os.path.islink(dest):
+        raise ValueError("refusing to write through a symlink")
+    if dest.exists() and dest.is_dir():
+        raise ValueError("--output is a directory")
+    if os.path.lexists(dest) and not force:
+        raise ValueError("refusing to overwrite; pass --force")
+    if os.path.lexists(dest):
+        _backup(dest)
+    if os.path.lexists(dest):
+        raise ValueError("refusing to overwrite")
+    if not dest.parent.is_dir():
+        raise ValueError("--output parent directory does not exist")
+    dest.write_text(text, encoding="utf-8")
+
+
 def _run(args: argparse.Namespace) -> int:
-    root = repo_root()
+    root = repo_root(args.repo)
     skills = discover_skills(root, args.skill)
     targets = list(args.target) if args.target else list(FS_TARGETS)
     if len(targets) != len(set(targets)):
@@ -253,13 +328,7 @@ def _run(args: argparse.Namespace) -> int:
         if args.apply:
             text = render_grok(skills)
             if args.output:
-                dest = Path(args.output)
-                if not dest.is_absolute():
-                    raise ValueError("pass an absolute --output path")
-                if dest.exists() and dest.is_dir():
-                    raise ValueError("--output is a directory")
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                dest.write_text(text, encoding="utf-8")
+                _write_grok(Path(args.output), text, bool(args.force))
                 wrote = True
             elif targets == ["grok"]:
                 sys.stdout.write(text)

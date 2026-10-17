@@ -127,12 +127,17 @@ def check_method(method):
 
 
 def _smuggled(x, depth=0):
-    """True if params contain something shaped like a nested JSON-RPC request."""
+    """True if params contain something shaped like a nested JSON-RPC request.
+
+    Nested keys are compared case-insensitively. ``Method`` is the same shape as ``method``.
+    """
     if depth > 8:
         return True
     if isinstance(x, dict):
-        if "method" in x or "jsonrpc" in x:
-            return True
+        for key in x:
+            folded = key.casefold() if isinstance(key, str) else None
+            if folded in {"method", "jsonrpc"}:
+                return True
         return any(_smuggled(v, depth + 1) for v in x.values())
     if isinstance(x, (list, tuple)):
         return any(_smuggled(v, depth + 1) for v in x)
@@ -140,8 +145,18 @@ def _smuggled(x, depth=0):
 
 
 def _no_dup_keys(pairs):
-    keys = [k for k, _ in pairs]
-    if len(keys) != len(set(keys)):
+    """Reject keys that collide under case-insensitive comparison.
+
+    Go's encoding/json (geth and clients built on it) matches object keys
+    case-insensitively and keeps the last one. ``method`` and ``METHOD``
+    are one key there.
+    """
+    folded = []
+    for key, _value in pairs:
+        if not isinstance(key, str):
+            raise RPCError("refused: duplicate keys in JSON payload")
+        folded.append(key.casefold())
+    if len(folded) != len(set(folded)):
         raise RPCError("refused: duplicate keys in JSON payload")
     return dict(pairs)
 
@@ -155,20 +170,47 @@ def check_url(url):
         raise RPCError(f"refused: RPC URL {u.netloc} carries a 'method' parameter")
 
 
+_REQUEST_KEYS = frozenset({"jsonrpc", "id", "method", "params"})
+
+
 def check_body(body):
     """Check EVERY JSON-RPC entry (single or batch) right before it leaves the machine.
-    The method must already be in canonical allowlisted spelling."""
+
+    The method must already be in canonical allowlisted spelling. Each object's
+    keys must be a subset of jsonrpc, id, method, and params, spelled exactly
+    like that, and jsonrpc must be the string "2.0". A key that differs only
+    by case (METHOD, Method, PARAMS) is not one of those names.
+    """
     entries = body if isinstance(body, list) else [body]
     if not entries:
         raise RPCError("refused: empty batch")
     for e in entries:
         if not isinstance(e, dict):
             raise RPCError("refused: batch entry is not an object")
+        if not set(e).issubset(_REQUEST_KEYS):
+            raise RPCError("refused: unexpected JSON-RPC keys")
+        if e.get("jsonrpc") != "2.0":
+            raise RPCError('refused: jsonrpc must be "2.0"')
         m = e.get("method")
         if check_method(m) != m:
             raise RPCError(f"refused: method {m!r} not in canonical allowlisted spelling")
         if _smuggled(e.get("params", [])):
             raise RPCError("refused: params contain a nested JSON-RPC request shape")
+
+
+class _RefuseRedirect(urllib.request.HTTPRedirectHandler):
+    """Refuse 301/302/303/307/308. Following one would skip allowed_hosts and chainId."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise RPCError(f"refused: HTTP redirect ({code})")
+
+    def _refuse(self, req, fp, code, msg, headers):
+        raise RPCError(f"refused: HTTP redirect ({code})")
+
+    http_error_301 = http_error_302 = http_error_303 = http_error_307 = http_error_308 = _refuse
+
+
+_OPENER = urllib.request.build_opener(_RefuseRedirect)
 
 
 class RPC:
@@ -247,8 +289,10 @@ class RPC:
         deadline = time.monotonic() + self.max_total_secs
         for attempt in range(self.retries + 1):
             try:
-                with urllib.request.urlopen(req, timeout=self.timeout) as r:
+                with _OPENER.open(req, timeout=self.timeout) as r:
                     return json.loads(r.read().decode())
+            except RPCError:
+                raise
             except urllib.error.HTTPError as e:
                 last = f"HTTP {e.code}"
                 if e.code not in (429, 500, 502, 503, 504):

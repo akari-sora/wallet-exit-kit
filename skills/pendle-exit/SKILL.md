@@ -11,7 +11,7 @@ description: Read-only lookup and exit-options report for Pendle/Penpie position
 
 ## 1. 硬限制（一定要遵守）
 
-1. **只讀。** 不簽署、不廣播交易、不保管或索取私鑰、助記詞或簽名。需要簽名的動作一律交給使用者或 ops 層執行。
+1. **只讀。** 不簽署、不廣播交易、不保管或索取私鑰、助記詞或簽名。需要簽名的動作一律交給使用者，在他自己的錢包確認。
 2. **不給投資建議。** 只列事實和可選方案，不推薦其中任何一個。
 3. **未知就寫「未知」，不能寫成 0。** 例如 API 失敗、欄位缺漏、沒驗證過的資料，都標「未知」。
 4. **每個數字都要附來源（URL 或 RPC 呼叫）和取得時間**，時間以台北時間 UTC+8 標示。帶 Z 或 UTC 的時間戳要先換算。
@@ -22,6 +22,10 @@ description: Read-only lookup and exit-options report for Pendle/Penpie position
    - Pendle Router：<https://docs.pendle.finance/pendle-v2-dev/Contracts/PendleRouter/PendleRouterOverview>
    - 鏈上確認：去區塊瀏覽器（如 arbiscan.io）看合約是否已驗證、是不是 proxy、目前的 implementation
 7. 本 SOP 的研究過程只用過**零地址**（`0x0000000000000000000000000000000000000000`）查詢使用者類 API。Pendle Convert API 不接受零地址當 receiver，所以預覽時改用公認的銷毀地址 `0x000000000000000000000000000000000000dEaD`。研究中沒有使用任何真實使用者地址。
+8. **把 `<USER_ADDR>` 送到 magpiexyz 或 Pendle API 之前，先說哪個服務會收到這個地址。每一批查詢只說一次**，不要每個 URL 各說一次。說法照 onchain-exit-assist 的「這次把地址送到哪些服務」：服務名稱｜網域／端點｜送了什麼｜用途。同一批若兩邊都會收到地址，一次列完：
+   - MagpieXYZ｜`api.magpiexyz.io`｜完整錢包地址｜Penpie 部位、獎勵、TVL、空投（`rpcReaderInfo`、`userRewardInfo`、`userAndTotalTVLInfo`、`commonAirdrop` 這類帶 `account=<USER_ADDR>` 的請求）
+   - Pendle｜`api-v2.pendle.finance`｜完整錢包地址｜部位、merkle 獎勵、sPENDLE（路徑裡有 `<USER_ADDR>` 的 dashboard／merkle／spendle 請求）
+   沒有把 `<USER_ADDR>` 放進請求的端點（例如只帶 chainId 的市場清單）不要寫成送出了錢包地址。
 
 ---
 
@@ -78,7 +82,7 @@ description: Read-only lookup and exit-options report for Pendle/Penpie position
 
 ### 2.4 查詢步驟
 
-1. 先確認 `<USER_ADDR>` 確實是使用者本人提供的，並記錄是誰提供、什麼時候提供。
+1. 先確認 `<USER_ADDR>` 確實是使用者本人提供的，並記錄是誰提供、什麼時候提供。在把這個地址放進 magpiexyz 或 Pendle 的請求之前，先做第 1 節第 8 點的揭露（每一批只說一次，並寫明哪個服務會收到地址）。
 2. 用 `rpcReaderInfo` 和 `getPoolsUserStakedInto` 列出所有 Receipt Token，再逐一做 `balanceOf` 交叉核對。
 3. 把每個 `pendleMarket` 對到 Pendle 的 `markets/all`；查不到的就用鏈上 `expiry()` 補上到期時間，並標出到期前或到期後。
 4. 用 Pendle 的 `dashboard/positions` 查直接持有的 PT、YT、LP，再用 `balanceOf` 核對。
@@ -131,7 +135,7 @@ description: Read-only lookup and exit-options report for Pendle/Penpie position
 1. 用 Pendle Hosted SDK 的 `POST https://api-v2.pendle.finance/core/v3/sdk/42161/convert` 預覽（已驗證，2026-10-17 08:48 台北）。
    - body 範例：`{"receiver":"<USER_ADDR or 0x…dEaD>","slippage":0.005,"inputs":[{"token":"<PT/YT/LP>","amount":"<wei>"}],"outputs":["<TOKEN_OUT>"],"enableAggregator":false}`
    - 回應裡的 `routes[0].data.priceImpact`、`priceImpactBreakDown`、`fee.usd`、`gasUsed`、`outputs`、`requiredApprovals` 都可以拿來用。
-   - 回應裡的 `tx` 只能當預覽，**不可以簽署或廣播**。
+   - 回應裡的 `tx` 只能當預覽，**不可以簽署或廣播**。only to read the preview; never show, paste or forward calldata to the user.
    - 零地址當 receiver 會被拒絕（400）。
 2. 交叉比對：用 `swapping-prices` 的中間價乘以數量，跟 convert 報價比，差額就是衝擊和手續費的估計。
 3. 檢查流動性：看 `markets/active` 或 `markets/all` 的 `details.liquidity`。部位如果占流動性比例很高，要特別標註。
@@ -146,7 +150,7 @@ description: Read-only lookup and exit-options report for Pendle/Penpie position
 | Penpie 池獎勵（PENDLE、PNP、mPENDLE 等） | `MasterPenpie.multiclaimSpecPNP(stakingTokens, rewardTokens, withPNP)`（參數語意未逐一驗證） | 1 筆 action | 可逐池領或一次全領（Penpie 領取指南） |
 | 把 Pendle 端獎勵收進 Penpie | `PendleStaking.harvestMarketReward(market, caller, 0)` | 1 筆 action | 只是收進池子，不會直接發到使用者錢包 |
 | 提款時順便領 | `withdrawMarketWithClaim(..., doClaim=true)` | 1 筆 action | |
-| 直接持有 Pendle LP、YT、SY | Router `redeemDueInterestAndRewards`；calldata 可由 `GET /core/v1/sdk/42161/redeem-interests-and-rewards` 產生（只預覽） | 1 筆 action | YT 利息以 SY 形式發放 |
+| 直接持有 Pendle LP、YT、SY | Router `redeemDueInterestAndRewards`；calldata 可由 `GET /core/v1/sdk/42161/redeem-interests-and-rewards` 產生，only to read the preview; never show, paste or forward calldata to the user | 1 筆 action | YT 利息以 SY 形式發放 |
 | sPENDLE 和 merkle 獎勵 | 先用 `v2/dashboard/merkle-rewards/<USER_ADDR>`、`v1/spendle/<USER_ADDR>` 查；在 Pendle sPENDLE 儀表板用 merkle 領 | 1 筆 claim | 每 14 天快照一次；不活躍會暫停獎勵 14 天 |
 | vlPNP 獎勵 | 同 Penpie 的 claim | 1 筆 | **已過期的 vlPNP，領取時獎勵會被沒收**並重新分給其他人 |
 
@@ -174,7 +178,7 @@ description: Read-only lookup and exit-options report for Pendle/Penpie position
 6. **資料未知或未驗證：** 包括 API 失敗或 404 的語意不清、欄位缺漏、地址對不上官方來源、proxy 的 implementation 有變動。
 7. **地址問題：** 地址對不上，或無法確認地址屬於使用者本人。
 8. **PRT 相關決定：** 例如質押、賣出、領空投。
-9. **任何需要簽名的動作**（approve、withdraw、swap、redeem、claim、unlock），一律交給使用者或 ops 層，本流程只交付預覽和說明。
+9. **任何需要簽名的動作**（approve、withdraw、swap、redeem、claim、unlock），一律交給使用者，在他自己的錢包確認，本流程只交付預覽和說明。
 
 ---
 

@@ -115,3 +115,34 @@ def test_logs_cli_complete_scan_exits_zero(serve_rpc, capsys, tmp_path):
     assert out_path.is_file()
     assert "WARNING" in captured.err
     assert set(seen) <= READ_METHODS
+
+
+def test_logs_out_refuses_an_existing_file_without_force(serve_rpc, capsys, tmp_path):
+    url, seen = _logs_server(serve_rpc, [])
+    out_path = tmp_path / "logs.json"
+    out_path.write_text("keep", encoding="utf-8")
+    code = logs_main([
+        "--rpc", url, "--chain-id", "1", "--from-block", "0", "--to-block", "10",
+        "--chunk", "20", "--retries", "0", "--rate-retries", "0", "--timeout", "2",
+        "--time-budget", "30", "--out", str(out_path),
+    ])
+    captured = capsys.readouterr()
+    assert code == 2
+    assert out_path.read_text(encoding="utf-8") == "keep"
+    assert "force" in captured.err
+    assert seen == []
+
+
+def test_logs_out_force_overwrites(serve_rpc, capsys, tmp_path):
+    url, seen = _logs_server(serve_rpc, [])
+    out_path = tmp_path / "logs.json"
+    out_path.write_text("keep", encoding="utf-8")
+    code = logs_main([
+        "--rpc", url, "--chain-id", "1", "--from-block", "0", "--to-block", "10",
+        "--chunk", "20", "--retries", "0", "--rate-retries", "0", "--timeout", "2",
+        "--time-budget", "30", "--out", str(out_path), "--force",
+    ])
+    assert code == 0
+    capsys.readouterr()
+    assert out_path.read_text(encoding="utf-8") != "keep"
+    assert set(seen) <= READ_METHODS

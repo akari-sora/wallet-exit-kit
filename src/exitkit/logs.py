@@ -10,7 +10,7 @@
   as possibly truncated: it is split and re-scanned; at min_chunk it is listed in `suspect`.
 - coverage = scanned blocks / requested blocks (suspect chunks do not count as scanned).
 - --out writes raw logs that CONTAIN the queried address (privacy data). Write only to a temp
-  directory and delete it after use.
+  directory and delete it after use. An existing path is left alone unless --force.
 
 CLI example (fake owner; <RPC_URL> is a placeholder; finds Approval events where topic1 = owner):
   exitkit logs --rpc <RPC_URL> --chain-id 1 \
@@ -18,7 +18,7 @@ CLI example (fake owner; <RPC_URL> is a placeholder; finds Approval events where
       --topic1-addr 0x1111111111111111111111111111111111111111 \
       --from-block 26200000 --to-block latest --chunk 5000
 """
-import argparse, json, sys, time
+import argparse, json, os, sys, time
 from exitkit.rpc import RPC, RPCError, topic_addr
 
 SPLIT_HINTS = ("range", "too many results", "result limit", "results limit", "log limit", "exceed",
@@ -133,7 +133,11 @@ def main(argv=None):
     ap.add_argument("--time-budget", type=float, default=600, help="total seconds for the whole scan")
     ap.add_argument("--allowed-host", action="append", help="user preference 'RPC + official only': restrict hosts")
     ap.add_argument("--out", help="WRITES raw logs incl. the queried address (privacy data); use a temp dir, delete after")
+    ap.add_argument("--force", action="store_true", help="overwrite an existing --out file")
     a = ap.parse_args(argv)
+    if a.out and os.path.lexists(a.out) and not a.force:
+        print(f"refusing to overwrite {a.out}; pass --force", file=sys.stderr)
+        return 2
     rpc = RPC(a.rpc, label="logs", expect_chain_id=a.chain_id, allow_fallback=a.allow_fallback,
               allowed_hosts=a.allowed_host, retries=a.retries, timeout=a.timeout,
               max_total_secs=min(a.time_budget, 120), wallets=[x for x in (a.topic1_addr, a.topic2_addr) if x])

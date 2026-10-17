@@ -150,3 +150,201 @@ def test_grok_apply_stdout(capsys):
     text = capsys.readouterr().out
     assert "name: onchain-exit-assist" in text
     assert "# Embedded reference: references/01-asset-scan.md" in text
+
+
+def _snapshot(path: Path) -> list[tuple[str, str]]:
+    rows: list[tuple[str, str]] = []
+    for dirpath, dirnames, filenames in os.walk(path, followlinks=False):
+        dirnames.sort()
+        for name in sorted(filenames):
+            item = Path(dirpath) / name
+            rel = item.relative_to(path).as_posix()
+            if item.is_symlink():
+                rows.append((rel, "link:" + os.readlink(item)))
+            else:
+                rows.append((rel, item.read_bytes().hex()))
+    return rows
+
+
+def test_force_over_existing_symlink_keeps_the_source(tmp_path, capsys):
+    home = tmp_path / "home"
+    home.mkdir()
+    before = _snapshot(SKILL)
+    assert not any(name.startswith("onchain-exit-assist.exitkit-bak-") for name in os.listdir(SKILL.parent))
+    code = install_main([
+        "--home", str(home), "--apply", "--target", "claude", "--skill", "onchain-exit-assist",
+    ])
+    first = capsys.readouterr().out
+    assert code == 0, first
+    dest = home / ".claude" / "skills" / "onchain-exit-assist"
+    assert dest.is_symlink()
+    assert os.readlink(dest) == str(SKILL)
+    assert SKILL.resolve() != home.resolve()
+    code = install_main([
+        "--home", str(home), "--target", "claude", "--skill", "onchain-exit-assist",
+    ])
+    dry = capsys.readouterr().out
+    assert code == 0, dry
+    report = json.loads(dry)
+    assert report["ok"] is True
+    assert report["dry_run"] is True
+    assert "escapes" not in dry
+    code = install_main([
+        "--home", str(home), "--apply", "--force", "--target", "claude", "--skill", "onchain-exit-assist",
+    ])
+    forced = capsys.readouterr().out
+    assert code == 0, forced
+    assert _snapshot(SKILL) == before
+    assert SKILL.is_dir() and not SKILL.is_symlink()
+    assert list(SKILL.parent.glob("onchain-exit-assist.exitkit-bak-*")) == []
+    assert dest.is_symlink()
+    assert os.readlink(dest) == str(SKILL)
+    backups = list((home / ".claude" / "skills").glob("onchain-exit-assist.exitkit-bak-*"))
+    assert len(backups) == 1
+    assert backups[0].is_symlink()
+    assert os.readlink(backups[0]) == str(SKILL)
+
+
+def test_force_does_not_rename_a_user_symlink_target(tmp_path, capsys):
+    home = tmp_path / "home"
+    dotfiles = home / "dotfiles" / "onchain-exit-assist"
+    dotfiles.mkdir(parents=True)
+    (dotfiles / "marker.txt").write_text("user", encoding="utf-8")
+    inode = dotfiles.stat().st_ino
+    dest_parent = home / ".claude" / "skills"
+    dest_parent.mkdir(parents=True)
+    dest = dest_parent / "onchain-exit-assist"
+    dest.symlink_to(dotfiles, target_is_directory=True)
+    code = install_main([
+        "--home", str(home), "--apply", "--force", "--target", "claude", "--skill", "onchain-exit-assist",
+    ])
+    assert code == 0, capsys.readouterr().out
+    assert dotfiles.stat().st_ino == inode
+    assert (dotfiles / "marker.txt").read_text(encoding="utf-8") == "user"
+    assert dest.is_symlink()
+    assert os.readlink(dest) == str(SKILL)
+    backups = list(dest_parent.glob("onchain-exit-assist.exitkit-bak-*"))
+    assert len(backups) == 1
+    assert backups[0].is_symlink()
+    assert os.readlink(backups[0]) == str(dotfiles)
+
+
+def test_symlinked_agent_dir_outside_the_skills_dir_is_refused(tmp_path, capsys):
+    home = tmp_path / "home"
+    other = home / "other-dir"
+    other.mkdir(parents=True)
+    (other / "marker.txt").write_text("keep", encoding="utf-8")
+    (home / ".claude").symlink_to(other, target_is_directory=True)
+    code = install_main([
+        "--home", str(home), "--apply", "--target", "claude", "--skill", "onchain-exit-assist",
+    ])
+    assert code == 2
+    err = json.loads(capsys.readouterr().out)
+    assert err["ok"] is False
+    assert "escapes HOME" in err["error"]
+    assert (other / "marker.txt").read_text(encoding="utf-8") == "keep"
+    assert not (other / "skills").exists()
+
+
+def test_install_ignores_an_unrelated_current_directory(tmp_path, monkeypatch, capsys):
+    stranger = tmp_path / "stranger"
+    skill = stranger / "skills" / "not-ours"
+    skill.mkdir(parents=True)
+    (skill / "SKILL.md").write_text("---\nname: not-ours\n---\n", encoding="utf-8")
+    (stranger / "pyproject.toml").write_text('[project]\nname = "wallet-exit-kit"\n', encoding="utf-8")
+    monkeypatch.chdir(stranger)
+    home = tmp_path / "home"
+    home.mkdir()
+    code = install_main(["--home", str(home), "--skill", "not-ours"])
+    assert code == 2
+    err = json.loads(capsys.readouterr().out)
+    assert err["ok"] is False
+    assert "not-ours" in err["error"]
+    assert list(home.iterdir()) == []
+
+
+def test_repo_must_be_an_absolute_checkout(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(ROOT)
+    code = install_main(["--repo", ".", "--home", str(tmp_path), "--skill", "onchain-exit-assist"])
+    assert code == 2
+    assert "absolute" in json.loads(capsys.readouterr().out)["error"]
+    code = install_main(["--repo", str(tmp_path), "--home", str(tmp_path), "--skill", "onchain-exit-assist"])
+    assert code == 2
+    assert "checkout" in json.loads(capsys.readouterr().out)["error"]
+
+
+def test_copy_refuses_a_symlink_inside_the_skill(tmp_path, capsys):
+    repo = tmp_path / "repo"
+    skill = repo / "skills" / "demo-skill"
+    skill.mkdir(parents=True)
+    (skill / "SKILL.md").write_text("---\nname: demo-skill\n---\n", encoding="utf-8")
+    (repo / "pyproject.toml").write_text('[project]\nname = "wallet-exit-kit"\n', encoding="utf-8")
+    secret = tmp_path / "secret.txt"
+    secret.write_text("secret", encoding="utf-8")
+    (skill / "link.txt").symlink_to(secret)
+    home = tmp_path / "home"
+    home.mkdir()
+    code = install_main([
+        "--repo", str(repo), "--home", str(home), "--apply", "--copy",
+        "--target", "claude", "--skill", "demo-skill",
+    ])
+    assert code == 2
+    err = json.loads(capsys.readouterr().out)
+    assert err["ok"] is False
+    assert "symlink" in err["error"]
+    assert secret.read_text(encoding="utf-8") == "secret"
+    assert not (home / ".claude" / "skills" / "demo-skill").exists()
+
+
+def test_grok_apply_refuses_to_overwrite_without_force(tmp_path, capsys):
+    out = tmp_path / "grok.md"
+    out.write_text("keep", encoding="utf-8")
+    code = install_main([
+        "--target", "grok", "--apply", "--skill", "onchain-exit-assist", "--output", str(out),
+    ])
+    assert code == 2
+    assert out.read_text(encoding="utf-8") == "keep"
+    err = json.loads(capsys.readouterr().out)
+    assert err["ok"] is False
+    assert "force" in err["error"]
+
+
+def test_grok_apply_force_backs_up_the_existing_file(tmp_path, capsys):
+    out = tmp_path / "grok.md"
+    out.write_text("keep", encoding="utf-8")
+    code = install_main([
+        "--target", "grok", "--apply", "--force", "--skill", "onchain-exit-assist", "--output", str(out),
+    ])
+    assert code == 0, capsys.readouterr().out
+    assert "name: onchain-exit-assist" in out.read_text(encoding="utf-8")
+    backups = list(tmp_path.glob("grok.md.exitkit-bak-*"))
+    assert len(backups) == 1
+    assert backups[0].read_text(encoding="utf-8") == "keep"
+
+
+def test_grok_apply_refuses_a_symlink(tmp_path, capsys):
+    target = tmp_path / "real.md"
+    target.write_text("keep", encoding="utf-8")
+    out = tmp_path / "link.md"
+    out.symlink_to(target)
+    code = install_main([
+        "--target", "grok", "--apply", "--force", "--skill", "onchain-exit-assist", "--output", str(out),
+    ])
+    assert code == 2
+    err = json.loads(capsys.readouterr().out)
+    assert err["ok"] is False
+    assert "symlink" in err["error"]
+    assert target.read_text(encoding="utf-8") == "keep"
+    assert out.is_symlink()
+    assert os.readlink(out) == str(target)
+
+
+def test_grok_apply_does_not_create_parent_directories(tmp_path, capsys):
+    out = tmp_path / "missing" / "grok.md"
+    code = install_main([
+        "--target", "grok", "--apply", "--skill", "onchain-exit-assist", "--output", str(out),
+    ])
+    assert code == 2
+    assert not (tmp_path / "missing").exists()
+    err = json.loads(capsys.readouterr().out)
+    assert "parent" in err["error"]

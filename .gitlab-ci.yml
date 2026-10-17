@@ -13,6 +13,6 @@ stages:
 test:
   stage: test
   script:
-    - python -m pip install --no-cache-dir -e .
+    - python -m pip install --no-cache-dir -e ".[dev]"
     - pytest -q
     - exitkit audit .

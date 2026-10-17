@@ -37,8 +37,8 @@ incomplete: sim["ok"] is False and check() FAILs (never PASS). spec.chain_id is 
 CLI: exitkit simulate spec.json   (spec = {"rpc": [...], "chain_id": n, "owner": ..., "txs": [...],
                                        "reads": [...], "pre_reads": [...], "assertions": [...]})
 """
-import json, sys
-from exitkit.rpc import RPC, UNKNOWN, Unknown, enc, MULTICALL3
+import argparse, json, sys
+from exitkit.rpc import RPC, RPCError, UNKNOWN, Unknown, enc, MULTICALL3
 
 TRANSFER = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
 APPROVAL = "0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925"
@@ -330,18 +330,45 @@ def check(sim, assertions):
 
 
 def main(argv=None):
-    if argv is None:
-        argv = sys.argv[1:]
-    spec = json.load(open(argv[0]))
+    parser = argparse.ArgumentParser(
+        prog="exitkit simulate",
+        description="Read-only eth_simulateV1 from a JSON spec. Nothing is signed or broadcast.",
+    )
+    parser.add_argument("spec", help="path to the JSON spec")
+    try:
+        args = parser.parse_args(argv)
+    except SystemExit as exc:
+        code = exc.code
+        return 0 if code is None else int(code)
+    try:
+        with open(args.spec, encoding="utf-8") as handle:
+            spec = json.load(handle)
+    except OSError as exc:
+        print(f"cannot read spec: {exc}", file=sys.stderr)
+        return 1
+    except json.JSONDecodeError as exc:
+        print(f"spec is not JSON: {exc}", file=sys.stderr)
+        return 1
+    if not isinstance(spec, dict):
+        print("spec must be a JSON object", file=sys.stderr)
+        return 1
     if spec.get("chain_id") is None:
         print("spec.chain_id is required (chainId verification is mandatory)", file=sys.stderr)
         return 1
-    rpc = RPC(spec["rpc"], label=spec.get("label", "sim"), expect_chain_id=spec["chain_id"],
-              wallets=[spec["owner"]],
-              allowed_hosts=spec.get("allowed_hosts"))
-    sim = simulate(rpc, spec["owner"], spec["txs"], spec.get("reads", []), spec.get("pre_reads", []),
-                   spec.get("state_overrides"), spec.get("base_block"), spec.get("gas_price"))
-    rep = check(sim, spec.get("assertions", []))
+    missing = [key for key in ("rpc", "owner", "txs") if key not in spec]
+    if missing:
+        print("spec is missing " + ", ".join(missing), file=sys.stderr)
+        return 1
+    try:
+        rpc = RPC(spec["rpc"], label=spec.get("label", "sim"), expect_chain_id=spec["chain_id"],
+                  wallets=[spec["owner"]],
+                  allowed_hosts=spec.get("allowed_hosts"))
+        sim = simulate(rpc, spec["owner"], spec["txs"], spec.get("reads", []), spec.get("pre_reads", []),
+                       spec.get("state_overrides"), spec.get("base_block"), spec.get("gas_price"))
+        rep = check(sim, spec.get("assertions", []))
+    except (RPCError, KeyError, TypeError, ValueError) as exc:
+        print(f"simulate failed: {exc}", file=sys.stderr)
+        return 1
     rep["address_sent_to"] = rpc.disclosure()
     print(json.dumps(rep, ensure_ascii=False, indent=1, default=str))
     return 0 if rep["pass"] else 1
