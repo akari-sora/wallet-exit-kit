@@ -68,6 +68,9 @@ KNOWN_64 = {  # public keccak constants (references/07)
     "fbde797d201c681b91056529119e0b02407c7bb96a4a2c75c01fc9667232c8db": "ERC-4626 Withdraw",
     "442e715f626346e8c54381002da614f62bee8d27386535b2521ec8540898556e": "Safe ExecutionSuccess",
     "bc7cd75a20ee27fd9adebab32041f755214dbc6bffa90cc0225b39da2e5c2d3b": "Upgraded",
+    # published release file hashes (gitlab.com/aa22396584/wallet-guardian/-/releases/v0.4.0-rc.5 SHA256SUMS)
+    "655b601f14c422e7b5ad14b0a8200dde72c0dc1df1d32f0ec98eec48c9a829ef": "wallet-guardian 0.4.0rc5 wheel sha256",
+    "06ae47cfca5995ad8847e8436435ba6ca0373b49f8f3af46dbc1224dbdfae80e": "wallet-guardian 0.4.0rc5 constraints.txt sha256",
     "7e644d79422f17c01e4894b5f4f588d331ebfa28653d42ae832dc59e38c9798f": "AdminChanged",
     "360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc": "EIP-1967 implementation slot",
     "b53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103": "EIP-1967 admin slot",

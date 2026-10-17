@@ -1,0 +1,2 @@
+EN: Wallet Guardian watches your public crypto addresses: assets, approvals, revoke and exit checklists you sign yourself, deadline reminders, and a public campaign radar. Watch-only: no keys, no signing, no investment advice.
+繁中：錢包守護幫你盯著公開錢包地址：資產、授權、由你自己簽的撤授權與退場核對卡、期限提醒，以及公開活動雷達。只看不簽：不碰私鑰、不簽名、不給投資建議。
