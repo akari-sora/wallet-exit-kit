@@ -8,7 +8,8 @@ What it finds (each hit is PUBLIC / FAKE / REVIEW):
 - Boundary rule: an allowlisted / public / fake address only counts as such when no hex char is
   directly before (or before its 0x) or after it; otherwise the whole combined run is REVIEW.
 - 64-hex strings (tx hash, private key, signature part): allowed only if in KNOWN_64 (public
-  event topics / storage slots listed in references/07) or an obvious placeholder.
+  event topics / storage slots listed in references/07, and published release file hashes)
+  or an obvious placeholder.
 - Other hex runs longer than 40 that are not 64: REVIEW (may hide an address).
 - Non-EVM / identity formats: Bitcoin bech32 (bc1…), TRON (T…), base58 (Solana/BTC legacy),
   ENS names (*.eth), email, social handles (at-sign + name), home/internal paths.
@@ -54,7 +55,7 @@ PUBLIC = {
     "8ce523cf1120d9b7703806c745b69663a2847504": "Penpie penpieBribeRewardDistributor (Arbitrum)",
     "888888888889758f76e7103c6cbf23abbf58f946": "Pendle RouterV4",
 }
-KNOWN_64 = {  # public keccak constants (references/07)
+KNOWN_64 = {  # public keccak constants (references/07) and published release file hashes
     "ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef": "Transfer",
     "8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925": "Approval",
     "17307eab39ab6107e8899845ad3d59bd9653f200f220920489ca2b5937696c31": "ApprovalForAll",
@@ -68,6 +69,9 @@ KNOWN_64 = {  # public keccak constants (references/07)
     "fbde797d201c681b91056529119e0b02407c7bb96a4a2c75c01fc9667232c8db": "ERC-4626 Withdraw",
     "442e715f626346e8c54381002da614f62bee8d27386535b2521ec8540898556e": "Safe ExecutionSuccess",
     "bc7cd75a20ee27fd9adebab32041f755214dbc6bffa90cc0225b39da2e5c2d3b": "Upgraded",
+    # published release file hashes (gitlab.com/aa22396584/wallet-guardian/-/releases/v0.4.0-rc.5 SHA256SUMS)
+    "655b601f14c422e7b5ad14b0a8200dde72c0dc1df1d32f0ec98eec48c9a829ef": "wallet-guardian 0.4.0rc5 wheel sha256",
+    "06ae47cfca5995ad8847e8436435ba6ca0373b49f8f3af46dbc1224dbdfae80e": "wallet-guardian 0.4.0rc5 constraints.txt sha256",
     "7e644d79422f17c01e4894b5f4f588d331ebfa28653d42ae832dc59e38c9798f": "AdminChanged",
     "360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc": "EIP-1967 implementation slot",
     "b53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103": "EIP-1967 admin slot",
