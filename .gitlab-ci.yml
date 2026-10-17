@@ -12,6 +12,9 @@ stages:
 
 test:
   stage: test
+  tags: [wg-9700x]
+  interruptible: true
+  timeout: 10m
   script:
     - python -m pip install --no-cache-dir -e ".[dev]"
     - pytest -q
