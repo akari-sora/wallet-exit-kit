@@ -111,6 +111,27 @@ KNOWN_TEXT = {
 }
 # Grok Bot keeps each account's skill library at this path; it is the same on every account, not a personal one.
 PLATFORM_PATHS = ("/ho" + "me/box/agent-data/",)
+TOKEN_EDGE = re.compile(r"[A-Za-z0-9._@/-]")
+PATH_TOKEN = re.compile(r"[^\s\"'`<>()\[\]{},;]+")
+
+
+def _known_text(label, line, m):
+    """KNOWN_TEXT entry for a match that is a whole token (nothing name-like glued before or after), else None."""
+    known = KNOWN_TEXT.get((label, m.group(0)))
+    if known is None:
+        return None
+    before = line[m.start() - 1] if m.start() > 0 else ""
+    after = line[m.end()] if m.end() < len(line) else ""
+    if TOKEN_EDGE.match(before) or (after and TOKEN_EDGE.match(after) and after not in "./"):
+        return None
+    return known
+
+
+def _platform_path(line, start):
+    """True when the whole path token starting here is under PLATFORM_PATHS with no "." or ".." segment."""
+    token = PATH_TOKEN.match(line, start).group(0)
+    parts = token.split("/")
+    return token.startswith(PLATFORM_PATHS) and ".." not in parts and "." not in parts
 
 
 def _python_decorator_lines(rel, lines):
@@ -302,8 +323,8 @@ def main(argv=None):
                     for m in rx.finditer(line):
                         if label == "social handle" and _is_python_decorator(decorators, i, line, m):
                             continue
-                        known = KNOWN_TEXT.get((label, m.group(0)))
-                        if known is None and label == "internal path" and line.startswith(PLATFORM_PATHS, m.start()):
+                        known = _known_text(label, line, m)
+                        if known is None and label == "internal path" and _platform_path(line, m.start()):
                             known = "Grok Bot platform skill folder (same on every account)"
                         hits.append((i, m.group(0), "PUBLIC: " + known if known else "REVIEW", label))
             # split-across-lines pass: a line ending in a 20-39 hex run + next line starting with hex

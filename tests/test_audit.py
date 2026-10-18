@@ -317,6 +317,10 @@ def test_known_public_text_and_platform_path_pass(tmp_path, capsys):
     "/ho" "me/bob/notes",
     "/ho" "me/box/other/",
     "see /ho" "me/box/agent-data-copy/",
+    "example.name" ".eth",
+    "alice-name" ".eth",
+    "/ho" "me/box/agent-data/../../example/private.txt",
+    "/ho" "me/box/agent-data/./x/../../y",
 ])
 def test_near_misses_of_public_text_stay_review(tmp_path, capsys, text):
     (tmp_path / "x.md").write_text(text + "\n")
