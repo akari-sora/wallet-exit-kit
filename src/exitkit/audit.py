@@ -95,9 +95,22 @@ OTHER = [
 ]
 
 
-def _is_python_decorator(rel, line, m):
-    """A Python decorator line (at-sign + name at the start of a .py line) is not a social handle."""
-    return rel.endswith(".py") and not line[:m.start()].strip() and line[m.end():m.end() + 1] in (".", "(", "")
+def _is_python_decorator(rel, lines, idx, m):
+    """A Python decorator (at-sign + name starting a .py line, applied to a def or class) is not a social handle."""
+    line = lines[idx]
+    if not rel.endswith(".py") or line[:m.start()].strip() or line[m.end():m.end() + 1] not in (".", "(", ""):
+        return False
+    depth = line.count("(") - line.count(")")
+    for nxt in lines[idx + 1:idx + 60]:
+        stripped = nxt.strip()
+        if depth > 0:
+            depth += nxt.count("(") - nxt.count(")")
+            continue
+        if not stripped or stripped.startswith("@"):
+            depth += nxt.count("(") - nxt.count(")")
+            continue
+        return stripped.startswith(("def ", "async def ", "class "))
+    return False
 
 
 def is_fake(h):
@@ -230,7 +243,7 @@ def main(argv=None):
                     hits.append((i, disp, kind, note))
                 for label, rx in OTHER:
                     for m in rx.finditer(line):
-                        if label == "social handle" and _is_python_decorator(rel, line, m):
+                        if label == "social handle" and _is_python_decorator(rel, lines, i - 1, m):
                             continue
                         hits.append((i, m.group(0), "REVIEW", label))
             # split-across-lines pass: a line ending in a 20-39 hex run + next line starting with hex

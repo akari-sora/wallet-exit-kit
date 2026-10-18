@@ -252,3 +252,13 @@ def test_handles_in_python_comments_and_docs_are_still_review(tmp_path, capsys):
     out = capsys.readouterr().out
     assert AT + "alice_dev" in out
     assert "notes.md" in out
+
+
+def test_multiline_decorator_is_skipped_but_docstring_handle_is_review(tmp_path, capsys):
+    (tmp_path / "test_y.py").write_text(
+        f"{AT}pytest.mark.parametrize(\n    'a',\n    [1],\n)\ndef g(a): pass\n")
+    assert audit_main([str(tmp_path)]) == 0
+    capsys.readouterr()
+    (tmp_path / "doc.py").write_text(f'"""Contact:\n{AT}alice_dev\n"""\nx = 1\n')
+    assert audit_main([str(tmp_path)]) != 0
+    assert AT + "alice_dev" in capsys.readouterr().out
