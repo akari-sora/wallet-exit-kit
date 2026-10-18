@@ -274,3 +274,9 @@ def test_unparsable_python_keeps_handles_as_review(tmp_path, capsys):
     (tmp_path / "broken.py").write_text(f"{AT}alice_dev\ndef f(:\n")
     assert audit_main([str(tmp_path)]) != 0
     assert AT + "alice_dev" in capsys.readouterr().out
+
+
+def test_vertical_tab_cannot_shift_decorator_line_numbers(tmp_path, capsys):
+    (tmp_path / "vt.py").write_text(f'"""Contact:\v\v{AT}alice_dev\n"""\n{AT}d\ndef f(): pass\n')
+    assert audit_main([str(tmp_path)]) != 0
+    assert AT + "alice_dev" in capsys.readouterr().out

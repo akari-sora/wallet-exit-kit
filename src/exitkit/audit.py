@@ -26,7 +26,7 @@ The walk skips __pycache__ and checkout tooling directories (.git, .venv, .omc,
 caches, dist, build, *.egg-info). Files that are read use the same classification
 rules as before.
 """
-import argparse, io, os, re, sys, tokenize
+import argparse, os, re, sys, tokenize
 
 # Tooling and VCS trees are not project source. A checkout is scanned after
 # `python3 -m venv .venv`, and local agent state may hold machine paths.
@@ -95,13 +95,15 @@ OTHER = [
 ]
 
 
-def _python_decorator_lines(rel, text):
+def _python_decorator_lines(rel, lines):
     """Line numbers where a real decorator starts, found with the tokenizer so strings and docstrings never count."""
     if not rel.endswith(".py"):
         return set()
     found, line_start = set(), True
     try:
-        for tok in tokenize.generate_tokens(io.StringIO(text).readline):
+        # Feed the same physical lines the scanner numbers, so line numbers always agree.
+        feed = iter([ln + "\n" for ln in lines])
+        for tok in tokenize.generate_tokens(lambda: next(feed, "")):
             if tok.type in (tokenize.NEWLINE, tokenize.NL):
                 line_start = True
                 continue
@@ -241,7 +243,7 @@ def main(argv=None):
                 errors.append((rel, e))
                 continue
             lines = text.splitlines()
-            decorators = _python_decorator_lines(rel, text)
+            decorators = _python_decorator_lines(rel, lines)
             hits = []
             for i, line in enumerate(lines, 1):
                 for s in a.forbid:
