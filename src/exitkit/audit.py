@@ -111,25 +111,35 @@ KNOWN_TEXT = {
 }
 # Grok Bot keeps each account's skill library at this path; it is the same on every account, not a personal one.
 PLATFORM_PATHS = ("/ho" + "me/box/agent-data/",)
-TOKEN_EDGE = re.compile(r"[A-Za-z0-9._@/-]")
-PATH_TOKEN = re.compile(r"[^\s\"'`<>()\[\]{},;]+")
+NAME_CHAR = re.compile(r"[A-Za-z0-9_@-]")
+PATH_TOKEN = re.compile(r"[^\s\"'`]+")
 
 
 def _known_text(label, line, m):
-    """KNOWN_TEXT entry for a match that is a whole token (nothing name-like glued before or after), else None."""
+    """KNOWN_TEXT entry for a match that is a whole token, else None.
+
+    Nothing name-like may touch it on the left (a longer ENS name ending in the known one, a handle glued to
+    a word), and on the right only sentence punctuation that is not followed by more name characters (a full
+    stop at the end of a sentence is fine; a dot followed by another label is not).
+    """
     known = KNOWN_TEXT.get((label, m.group(0)))
     if known is None:
         return None
     before = line[m.start() - 1] if m.start() > 0 else ""
-    after = line[m.end()] if m.end() < len(line) else ""
-    if TOKEN_EDGE.match(before) or (after and TOKEN_EDGE.match(after) and after not in "./"):
+    if before and (NAME_CHAR.match(before) or before in "./"):
+        return None
+    rest = line[m.end():]
+    tail = rest.lstrip(".,;:!?)]}>/")
+    if tail and NAME_CHAR.match(tail[0]) and len(tail) < len(rest):
+        return None
+    if rest and NAME_CHAR.match(rest[0]):
         return None
     return known
 
 
 def _platform_path(line, start):
     """True when the whole path token starting here is under PLATFORM_PATHS with no "." or ".." segment."""
-    token = PATH_TOKEN.match(line, start).group(0)
+    token = PATH_TOKEN.match(line, start).group(0).rstrip(".,;:!?)]}>")
     parts = token.split("/")
     return token.startswith(PLATFORM_PATHS) and ".." not in parts and "." not in parts
 

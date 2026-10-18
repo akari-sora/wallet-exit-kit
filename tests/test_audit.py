@@ -321,6 +321,9 @@ def test_known_public_text_and_platform_path_pass(tmp_path, capsys):
     "alice-name" ".eth",
     "/ho" "me/box/agent-data/../../example/private.txt",
     "/ho" "me/box/agent-data/./x/../../y",
+    "name" ".eth.example",
+    f"{AT}BotFather.foo",
+    '"/ho' 'me/box/agent-data/a,b/../../private"',
 ])
 def test_near_misses_of_public_text_stay_review(tmp_path, capsys, text):
     (tmp_path / "x.md").write_text(text + "\n")
@@ -359,3 +362,11 @@ def test_sha256sums_hash_that_cannot_be_verified_stays_review(tmp_path, capsys, 
         (tmp_path / "SHA256SUMS").write_text(f"{digest}  skills/gone.md\n")
     assert audit_main([str(tmp_path)]) != 0
     assert "REVIEW" in capsys.readouterr().out
+
+
+def test_known_text_with_trailing_punctuation_still_passes(tmp_path, capsys):
+    (tmp_path / "p.md").write_text(
+        f"Ask {AT}BotFather. Then {AT}username, and name" ".eth.\n"
+        '"/ho' 'me/box/agent-data/workflows/x/SKILL.md", done.\n')
+    assert audit_main([str(tmp_path)]) == 0
+    assert "REVIEW" not in capsys.readouterr().out
