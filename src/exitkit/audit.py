@@ -139,7 +139,7 @@ def _known_text(label, line, m):
 
 def _platform_path(line, start):
     """True when the whole path token starting here is under PLATFORM_PATHS with no "." or ".." segment."""
-    token = PATH_TOKEN.match(line, start).group(0).rstrip(".,;:!?)]}>")
+    token = PATH_TOKEN.match(line, start).group(0)   # untrimmed, so a final "." or ".." segment is still seen
     parts = token.split("/")
     return token.startswith(PLATFORM_PATHS) and ".." not in parts and "." not in parts
 

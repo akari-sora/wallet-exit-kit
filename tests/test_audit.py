@@ -324,6 +324,9 @@ def test_known_public_text_and_platform_path_pass(tmp_path, capsys):
     "name" ".eth.example",
     f"{AT}BotFather.foo",
     '"/ho' 'me/box/agent-data/a,b/../../private"',
+    '"/ho' 'me/box/agent-data/.."',
+    "/ho" "me/box/agent-data/x/..",
+    "/ho" "me/box/agent-data/.",
 ])
 def test_near_misses_of_public_text_stay_review(tmp_path, capsys, text):
     (tmp_path / "x.md").write_text(text + "\n")
