@@ -295,3 +295,63 @@ def test_public_feed_url_on_other_hosts_is_not_a_profile_url(tmp_path, capsys):
     (tmp_path / "feeds.md").write_text(f"https://api.paragraph.com/blogs/rss/{AT}base\n")
     audit_main([str(tmp_path)])
     assert "profile URL" not in capsys.readouterr().out
+
+
+def test_known_public_text_and_platform_path_pass(tmp_path, capsys):
+    (tmp_path / "notify.md").write_text(
+        f"Open {AT}BotFather, then check {AT}username and {AT}handle / {AT}handles.\n"
+        "A label like name.eth is blocked.\n"
+        "RULES = \"/ho" "me/box/agent-data/workflows/wallet-guardian-rules/SKILL.md\"\n")
+    assert audit_main([str(tmp_path)]) == 0
+    out = capsys.readouterr().out
+    assert "REVIEW" not in out
+    assert "Telegram's official bot-creation account" in out
+    assert "Grok Bot platform skill folder" in out
+
+
+@pytest.mark.parametrize("text", [
+    f"{AT}BotFather2",
+    f"{AT}Username",
+    f"{AT}alice_dev",
+    "alice" ".eth",
+    "/ho" "me/bob/notes",
+    "/ho" "me/box/other/",
+    "see /ho" "me/box/agent-data-copy/",
+])
+def test_near_misses_of_public_text_stay_review(tmp_path, capsys, text):
+    (tmp_path / "x.md").write_text(text + "\n")
+    assert audit_main([str(tmp_path)]) != 0
+    assert "REVIEW" in capsys.readouterr().out
+
+
+def _sums_case(tmp_path, body=b"skill text\n"):
+    (tmp_path / "skills").mkdir()
+    (tmp_path / "skills" / "a.md").write_bytes(body)
+    return hashlib.sha256(body).hexdigest()
+
+
+def test_sha256sums_with_matching_file_hash_passes(tmp_path, capsys):
+    digest = _sums_case(tmp_path)
+    (tmp_path / "SHA256SUMS").write_text(f"{digest}  skills/a.md\n")
+    assert audit_main([str(tmp_path)]) == 0
+    assert "verified file hash" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("make", ["wrong_hash", "escape", "other_file", "symlink", "missing"])
+def test_sha256sums_hash_that_cannot_be_verified_stays_review(tmp_path, capsys, make):
+    digest = _sums_case(tmp_path)
+    if make == "wrong_hash":
+        (tmp_path / "SHA256SUMS").write_text(f"{hashlib.sha256(b'x').hexdigest()}  skills/a.md\n")
+    elif make == "escape":
+        inner = tmp_path / "inner"
+        inner.mkdir()
+        (inner / "SHA256SUMS").write_text(f"{digest}  ../skills/a.md\n")
+    elif make == "other_file":
+        (tmp_path / "notes.md").write_text(f"{digest}  skills/a.md\n")
+    elif make == "symlink":
+        (tmp_path / "link.md").symlink_to(tmp_path / "skills" / "a.md")
+        (tmp_path / "SHA256SUMS").write_text(f"{digest}  link.md\n")
+    else:
+        (tmp_path / "SHA256SUMS").write_text(f"{digest}  skills/gone.md\n")
+    assert audit_main([str(tmp_path)]) != 0
+    assert "REVIEW" in capsys.readouterr().out
