@@ -99,7 +99,7 @@ Skills in this repo (all read-only; none signs, broadcasts or holds keys):
 - `skills/campaign-radar/`: watch exchange and wallet campaigns, Earn products and airdrops; report changes and deadlines within 72 hours. It never logs in or joins.
 - `skills/pendle-exit/`: look up Pendle and Penpie positions and list exit paths, rewards and risks. The contract addresses in it are public protocol contracts; re-check them against the cited sources before use.
 
-`templates/grok-bot/wallet-guardian-share/` holds the public Wallet Guardian Grok Bot template v1.0.0 (add it from https://x.ai/bot/TSOnLDpWzPi39xvgxjEtu): its instructions, four skills and red-team summary. `templates/grok-bot/wallet-exit-assistant/` holds a Grok bot template (v4.1, `TEMPLATE.md`) and its red-team summary. v3 main run: 29 verdicts, all PASS; v4 re-ran the 6 affected scenarios, all PASS; v4.1 re-ran the 3 scenarios it changed, all PASS. `REDTEAM-SUMMARY.md` lists the scenarios and results.
+`templates/grok-bot/wallet-guardian-share/` holds the Wallet Guardian Grok Bot v1.2.0: its instructions, six skills, `SHA256SUMS` and the v1.0/v1.1 red-team summary (v1.2 was tested offline and on a test bot only; see that folder's README). The public template link (https://x.ai/bot/TSOnLDpWzPi39xvgxjEtu) still serves v1.1.0, and template imports may currently arrive without skills, so use the manual setup in that folder's README. `templates/grok-bot/wallet-exit-assistant/` holds a Grok bot template (v4.1, `TEMPLATE.md`) and its red-team summary. v3 main run: 29 verdicts, all PASS; v4 re-ran the 6 affected scenarios, all PASS; v4.1 re-ran the 3 scenarios it changed, all PASS. `REDTEAM-SUMMARY.md` lists the scenarios and results.
 
 The installer picks up any new `skills/<name>/SKILL.md` without a CLI change.
 
@@ -166,7 +166,7 @@ exitkit decode request.json --expect-chain-id 1
 
 ### `exitkit audit`
 
-Heuristic scan of a folder for addresses and a few sensitive patterns (long hex, public-looking handles, email, home-directory paths, and similar). Public Multicall3, Uniswap Permit2, the native-asset placeholder, the zero address, precompile 1, known event topics, and obvious fake addresses (such as `0x1111…1111`) are not review items. A glued hex run next to one of those still is. Exit code 1 when anything needs review.
+Heuristic scan of a folder for addresses and a few sensitive patterns (long hex, public-looking handles, email, home-directory paths, and similar). Public Multicall3, Uniswap Permit2, the native-asset placeholder, the zero address, precompile 1, known event topics, obvious fake addresses (such as `0x1111…1111`), a few exact public strings (Telegram's official bot-creation handle, generic `@username`-style placeholders, the `name.eth` example, the Grok Bot platform skill folder) and, in a `SHA256SUMS` file, hashes that match the listed file are not review items. A glued hex run next to one of those still is. Exit code 1 when anything needs review.
 
 ```bash
 exitkit audit .
@@ -229,5 +229,5 @@ skills/<name>/        agent skills (scripts there call exitkit)
 tests/                offline pytest
 docs/zh-TW.md         Chinese notes
 templates/grok-bot/wallet-exit-assistant/   Grok bot template and red-team summary
-templates/grok-bot/wallet-guardian-share/   shareable Wallet Guardian bot v1.0.0
+templates/grok-bot/wallet-guardian-share/   shareable Wallet Guardian bot v1.2.0 (manual setup)
 ```

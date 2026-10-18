@@ -4,6 +4,8 @@
 
 ### Changed
 
+- Shareable Wallet Guardian bot v1.2.0 (files and manual setup; the public template link still serves v1.1.0 because the six-skill package exceeds the platform's template size limit): new `wallet-guardian-keys` (free read-only API keys through the secure secret card) and `wallet-guardian-notify` (Grok app notifications; Telegram private chat and ntfy.sh only after the helper's rules-check passes under rules v1.2) skills, rules v1.2, `SHA256SUMS`. The README notes that Grok Bot template imports may currently arrive without skills.
+- `exitkit audit`: a short list of exact public strings (Telegram's official bot-creation handle, generic `@username`-style placeholders, the `name.eth` example, the Grok Bot platform skill folder) is reported as PUBLIC instead of REVIEW only as a whole token; near misses stay REVIEW. In a file named `SHA256SUMS`, a 64-hex value is PUBLIC only when the file it lists (same folder or below, not a symlink, no path escape) really has that SHA-256.
 - Shareable Grok Bot template v1.1.0: the rules pin the watch-only `guardian` CLI v0.4.0-rc.6 (wheel and constraints.txt by SHA-256) instead of rc.5. Red-team summary adds the rc.6 install re-test. Same public link, updated in place.
 
 ### Fixed

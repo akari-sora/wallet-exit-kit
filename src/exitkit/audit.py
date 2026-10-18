@@ -8,11 +8,14 @@ What it finds (each hit is PUBLIC / FAKE / REVIEW):
 - Boundary rule: an allowlisted / public / fake address only counts as such when no hex char is
   directly before (or before its 0x) or after it; otherwise the whole combined run is REVIEW.
 - 64-hex strings (tx hash, private key, signature part): allowed only if in KNOWN_64 (public
-  event topics / storage slots listed in references/07, and published release file hashes)
-  or an obvious placeholder.
+  event topics / storage slots listed in references/07, and published release file hashes),
+  an obvious placeholder, or a verified file hash in a SHA256SUMS file (see below).
 - Other hex runs longer than 40 that are not 64: REVIEW (may hide an address).
 - Non-EVM / identity formats: Bitcoin bech32 (bc1…), TRON (T…), base58 (Solana/BTC legacy),
-  ENS names (*.eth), email, social handles (at-sign + name), home/internal paths.
+  ENS names (*.eth), email, social handles (at-sign + name), home/internal paths. A short list of
+  exact public strings (KNOWN_TEXT, PLATFORM_PATHS) is PUBLIC instead of REVIEW. In a file named
+  SHA256SUMS, a 64-hex value is PUBLIC only when the file it lists (in the same folder or below,
+  not a symlink, no path escape) really has that SHA-256.
 
 Limits: heuristics only. It cannot recognise private labels, balances, people's names written
 in prose, or screenshots. A PASS means "no pattern above was found", not "no private data".
@@ -26,7 +29,7 @@ The walk skips __pycache__ and checkout tooling directories (.git, .venv, .omc,
 caches, dist, build, *.egg-info). Files that are read use the same classification
 rules as before.
 """
-import argparse, os, re, sys, tokenize
+import argparse, hashlib, os, re, sys, tokenize
 
 # Tooling and VCS trees are not project source. A checkout is scanned after
 # `python3 -m venv .venv`, and local agent state may hold machine paths.
@@ -96,6 +99,49 @@ OTHER = [
     # patterns are split so this file does not match itself
     ("internal path", re.compile("(" + "/ho" + r"me/\w|/Us" + r"ers/\w|/work" + "space/|/ro" + "ot/|" + r"[A-Z]:\\Us" + r"ers\\)")),
 ]
+
+# Exact public text that the identity patterns above would otherwise flag: (label, matched text) -> what it is.
+# Matching is exact and case-sensitive, so a near miss (another handle, another .eth name) stays REVIEW.
+KNOWN_TEXT = {
+    ("social handle", "@" + "BotFather"): "Telegram's official bot-creation account",
+    ("social handle", "@" + "username"): "generic placeholder",
+    ("social handle", "@" + "handle"): "generic placeholder",
+    ("social handle", "@" + "handles"): "generic placeholder",
+    ("ENS name", "name" + ".eth"): "generic ENS example",
+}
+# Grok Bot keeps each account's skill library at this path; it is the same on every account, not a personal one.
+PLATFORM_PATHS = ("/ho" + "me/box/agent-data/",)
+NAME_CHAR = re.compile(r"[A-Za-z0-9_@-]")
+PATH_TOKEN = re.compile(r"[^\s\"'`]+")
+
+
+def _known_text(label, line, m):
+    """KNOWN_TEXT entry for a match that is a whole token, else None.
+
+    Nothing name-like may touch it on the left (a longer ENS name ending in the known one, a handle glued to
+    a word), and on the right only sentence punctuation that is not followed by more name characters (a full
+    stop at the end of a sentence is fine; a dot followed by another label is not).
+    """
+    known = KNOWN_TEXT.get((label, m.group(0)))
+    if known is None:
+        return None
+    before = line[m.start() - 1] if m.start() > 0 else ""
+    if before and (NAME_CHAR.match(before) or before in "./"):
+        return None
+    rest = line[m.end():]
+    tail = rest.lstrip(".,;:!?)]}>/")
+    if tail and NAME_CHAR.match(tail[0]) and len(tail) < len(rest):
+        return None
+    if rest and NAME_CHAR.match(rest[0]):
+        return None
+    return known
+
+
+def _platform_path(line, start):
+    """True when the whole path token starting here is under PLATFORM_PATHS with no "." or ".." segment."""
+    token = PATH_TOKEN.match(line, start).group(0)   # untrimmed, so a final "." or ".." segment is still seen
+    parts = token.split("/")
+    return token.startswith(PLATFORM_PATHS) and ".." not in parts and "." not in parts
 
 
 def _python_decorator_lines(rel, lines):
@@ -173,7 +219,33 @@ def _glued_before(line, p):
     return line[k:q], q
 
 
-def scan_hex(line, allow):
+SUMS_LINE = re.compile(r"^([0-9a-fA-F]{64}) [ *](\S.*)$")
+
+
+def _verified_sums(folder, text):
+    """Hashes in a SHA256SUMS file whose listed file (same folder or below, not a symlink) really has that SHA-256."""
+    found = {}
+    base = os.path.realpath(folder)
+    for line in text.splitlines():
+        m = SUMS_LINE.match(line)
+        if not m:
+            continue
+        rel = m.group(2)
+        target = os.path.join(folder, rel)
+        real = os.path.realpath(target)
+        if os.path.isabs(rel) or os.path.islink(target) or not real.startswith(base + os.sep):
+            continue
+        try:
+            with open(real, "rb") as f:
+                digest = hashlib.sha256(f.read()).hexdigest()
+        except OSError:
+            continue
+        if digest == m.group(1).lower():
+            found[digest] = rel
+    return found
+
+
+def scan_hex(line, allow, file_hashes=None):
     """Yield (display, kind, note) for every address-like hex in one line.
 
     Boundary rule: a run counts as allowlisted / public / fake only when it is bounded by non-hex
@@ -196,6 +268,8 @@ def scan_hex(line, allow):
             k = run.lower()
             if k in KNOWN_64:
                 yield pre + run, "PUBLIC: " + KNOWN_64[k], "64-hex constant"
+            elif file_hashes and k in file_hashes:
+                yield pre + run, "PUBLIC: sha256 of " + file_hashes[k], "verified file hash"
             elif k.startswith("0" * 24):
                 inner = run[24:]
                 yield pre + run, classify40(inner, allow), "32-byte topic-padded address"
@@ -247,18 +321,22 @@ def main(argv=None):
                 continue
             lines = text.splitlines()
             decorators = _python_decorator_lines(rel, lines)
+            file_hashes = _verified_sums(root, text) if fn == "SHA256SUMS" else None
             hits = []
             for i, line in enumerate(lines, 1):
                 for s in a.forbid:
                     if s.lower() in line.lower():
                         forbidden.append((rel, i, s))
-                for disp, kind, note in scan_hex(line, allow):
+                for disp, kind, note in scan_hex(line, allow, file_hashes):
                     hits.append((i, disp, kind, note))
                 for label, rx in OTHER:
                     for m in rx.finditer(line):
                         if label == "social handle" and _is_python_decorator(decorators, i, line, m):
                             continue
-                        hits.append((i, m.group(0), "REVIEW", label))
+                        known = _known_text(label, line, m)
+                        if known is None and label == "internal path" and _platform_path(line, m.start()):
+                            known = "Grok Bot platform skill folder (same on every account)"
+                        hits.append((i, m.group(0), "PUBLIC: " + known if known else "REVIEW", label))
             # split-across-lines pass: a line ending in a 20-39 hex run + next line starting with hex
             for i in range(len(lines) - 1):
                 m1 = re.search(r"(?<![0-9a-fA-F])(?:0[xX])?([0-9a-fA-F]{8,39})\s*$", lines[i])
