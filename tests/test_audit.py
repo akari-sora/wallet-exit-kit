@@ -280,3 +280,18 @@ def test_vertical_tab_cannot_shift_decorator_line_numbers(tmp_path, capsys):
     (tmp_path / "vt.py").write_text(f'"""Contact:\v\v{AT}alice_dev\n"""\n{AT}d\ndef f(): pass\n')
     assert audit_main([str(tmp_path)]) != 0
     assert AT + "alice_dev" in capsys.readouterr().out
+
+
+def test_profile_urls_and_long_handles_are_review(tmp_path, capsys):
+    (tmp_path / "links.md").write_text(
+        f"https://www.threads.net/{AT}alice_dev\nsee {AT}alice_developer_team\n")
+    assert audit_main([str(tmp_path)]) != 0
+    out = capsys.readouterr().out
+    assert "profile URL" in out
+    assert AT + "alice_developer_team" in out
+
+
+def test_public_feed_url_on_other_hosts_is_not_a_profile_url(tmp_path, capsys):
+    (tmp_path / "feeds.md").write_text(f"https://api.paragraph.com/blogs/rss/{AT}base\n")
+    audit_main([str(tmp_path)])
+    assert "profile URL" not in capsys.readouterr().out

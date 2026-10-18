@@ -89,7 +89,10 @@ OTHER = [
                                        r"(?=[1-9A-HJ-NP-Za-km-z]*[a-z])[1-9A-HJ-NP-Za-km-z]{26,44}(?![0-9A-Za-z])")),
     ("ENS name", re.compile(r"\b[a-z0-9-]{3,}\.eth\b", re.I)),
     ("email", re.compile(r"\b[\w.+-]+@[\w-]+\.[\w.-]+\b")),
-    ("social handle", re.compile(r"(?<![\w.@/])" + "@" + r"[A-Za-z0-9_]{3,15}\b")),
+    ("social handle", re.compile(r"(?<![\w.@/])" + "@" + r"[A-Za-z0-9_]{3,30}\b")),
+    # personal profile URLs on social hosts (public org feeds on other hosts are not flagged)
+    ("profile URL", re.compile(r"https?://(?:www\.)?(?:threads\.(?:net|com)|medium\.com|youtube\.com|tiktok\.com|"
+                               r"mastodon\.social|warpcast\.com|farcaster\.xyz)/" + "@" + r"[A-Za-z0-9_.]{2,30}", re.I)),
     # patterns are split so this file does not match itself
     ("internal path", re.compile("(" + "/ho" + r"me/\w|/Us" + r"ers/\w|/work" + "space/|/ro" + "ot/|" + r"[A-Z]:\\Us" + r"ers\\)")),
 ]
