@@ -22,10 +22,19 @@ def test_time_budget_marks_unscanned_ranges_unknown():
     assert all("time budget" in item[2] for item in result["failed"])
 
 
-def test_rate_limit_does_not_split():
+@pytest.mark.parametrize("error", [
+    "429 too many requests",
+    {"code": -32000, "message": "rate limit exceeded, retry later"},
+    {"code": -32000, "message": "too many requests, retry later"},
+])
+def test_rate_limit_does_not_split(error):
+    requested_ranges = []
+
     class Rate:
         def batch(self, calls):
-            values = [(False, "429 too many requests") for _ in calls]
+            requested_ranges.extend((int(params[0]["fromBlock"], 16),
+                                     int(params[0]["toBlock"], 16)) for _, params in calls)
+            values = [(False, error) for _ in calls]
             return BatchResult(values, "logs (fake)")
 
     result = get_logs(Rate(), 0, 99, chunk=100, min_chunk=10, rate_retries=0, time_budget=30)
@@ -34,6 +43,7 @@ def test_rate_limit_does_not_split():
     assert result["failed"][0][1] == 99
     assert "rate-limited" in result["failed"][0][2]
     assert result["status"] == "INCOMPLETE"
+    assert requested_ranges == [(0, 99)]
 
 
 def test_error_text_containing_rate_limit_words_is_not_rate_limited():
@@ -57,6 +67,20 @@ def test_json_rpc_rate_limit_code_is_classified_without_message_matching():
             )
 
     result = get_logs(Rate(), 0, 0, chunk=1, rate_retries=0, time_budget=30)
+    assert "rate-limited" in result["failed"][0][2]
+
+
+def test_structured_http_429_is_classified_with_an_opaque_message():
+    class Rate:
+        def batch(self, calls):
+            return BatchResult(
+                [(False, {"http_status": 429, "message": "provider busy"}) for _ in calls],
+                "logs (fake)",
+            )
+
+    result = get_logs(Rate(), 0, 99, chunk=100, min_chunk=10, rate_retries=0)
+    assert len(result["failed"]) == 1
+    assert result["failed"][0][:2] == (0, 99)
     assert "rate-limited" in result["failed"][0][2]
 
 
@@ -96,19 +120,37 @@ def test_http_429_transport_error_is_rate_limited_without_a_socket(monkeypatch):
     rpc.timeout = 1
     rpc.max_total_secs = 1
     rpc.ua = "test"
+    batch_result = rpc.batch([("eth_getLogs", [{"fromBlock": "0x0", "toBlock": "0x0"}])])
+    ok, error = batch_result.values[0]
+    assert ok is False
+    assert isinstance(error, dict)
+    assert error["http_status"] == 429
+    # Remove all textual 429 clues: classification must use propagated status.
+    error["message"] = "provider busy"
+    monkeypatch.setattr(rpc, "batch", lambda calls: batch_result)
     result = get_logs(rpc, 0, 0, chunk=1, rate_retries=0, time_budget=30)
     assert "rate-limited" in result["failed"][0][2]
 
 
-def test_oversized_range_splits_until_it_fits():
+@pytest.mark.parametrize("error", [
+    "block range too large",
+    {"code": -32000, "message": "limit exceeded"},
+    {"code": -32005, "message": "query returned more than 10000 results"},
+    {"code": -32005, "message": "block range too large"},
+    {"code": -32005, "message": "limit exceeded"},
+])
+def test_oversized_range_splits_until_it_fits(error):
+    requested_ranges = []
+
     class Split:
         def batch(self, calls):
             values = []
             for _method, params in calls:
                 flt = params[0]
+                requested_ranges.append((int(flt["fromBlock"], 16), int(flt["toBlock"], 16)))
                 size = int(flt["toBlock"], 16) - int(flt["fromBlock"], 16) + 1
                 if size > 64:
-                    values.append((False, "block range too large"))
+                    values.append((False, error))
                 else:
                     values.append((True, []))
             return BatchResult(values, "logs (fake)")
@@ -118,6 +160,19 @@ def test_oversized_range_splits_until_it_fits():
     assert result["status"] == "COMPLETE"
     assert result["failed"] == []
     assert result["coverage"] == 1
+    assert requested_ranges == [(0, 127), (0, 63), (64, 127)]
+
+
+@pytest.mark.parametrize("option", ["chunk", "batch"])
+@pytest.mark.parametrize("value", [0, -1])
+def test_get_logs_rejects_nonpositive_sizes_before_building_queue(monkeypatch, option, value):
+    def must_not_build_queue(*args):
+        raise AssertionError("invalid chunk reached queue construction")
+
+    # Bound the pre-fix failure: never let an invalid chunk grow the queue forever.
+    monkeypatch.setattr("exitkit.logs.min", must_not_build_queue, raising=False)
+    with pytest.raises(ValueError, match=option + ".*at least 1"):
+        get_logs(_Boom(), 0, 99, **{option: value})
 
 
 def test_provider_cap_is_suspect_not_complete():
@@ -166,8 +221,9 @@ def test_logs_cli_rejects_invalid_topic_address_before_rpc(monkeypatch, capsys, 
     assert "exactly 20 bytes" in capsys.readouterr().err
 
 
-@pytest.mark.parametrize("chunk", ["0", "-1"])
-def test_logs_cli_rejects_chunk_less_than_one_before_rpc(monkeypatch, capsys, chunk):
+@pytest.mark.parametrize("option", ["--chunk", "--batch"])
+@pytest.mark.parametrize("value", ["0", "-1"])
+def test_logs_cli_rejects_sizes_less_than_one_before_rpc(monkeypatch, capsys, option, value):
     def rpc_must_not_be_constructed(*args, **kwargs):
         raise AssertionError("RPC constructed")
 
@@ -175,7 +231,7 @@ def test_logs_cli_rejects_chunk_less_than_one_before_rpc(monkeypatch, capsys, ch
     with pytest.raises(SystemExit) as exc:
         logs_main([
             "--rpc", "http://127.0.0.1:9", "--chain-id", "1",
-            "--from-block", "0", "--to-block", "0", "--chunk", chunk,
+            "--from-block", "0", "--to-block", "0", option, value,
         ])
     assert exc.value.code == 2
     assert "at least 1" in capsys.readouterr().err

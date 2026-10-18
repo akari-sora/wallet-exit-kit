@@ -4,8 +4,10 @@
 - Splits [from, to] into chunks; on "range too large / too many results / limit" errors
   the chunk is halved and retried (down to min_chunk).
 - Chunks that still fail are listed in `failed`; they are NOT treated as "no events".
-- Rate-limit errors (429 / "rate limit" / "too many requests") are NOT split; they are retried
-  by the RPC client's backoff and, if still failing, listed in `failed`.
+- Structured HTTP 429 status and explicit rate-limit phrases (including retry instructions)
+  keep the same range. Otherwise, range/result split hints take precedence over RPC rate-limit
+  codes (including Infura -32005). Generic "limit exceeded" is a split hint.
+- Rate limits and timeouts are retried with backoff; exhausted retries are listed in `failed`.
 - A chunk whose result count hits a common provider cap (1000 / 5000 / 10000 / 20000) is treated
   as possibly truncated: it is split and re-scanned; at min_chunk it is listed in `suspect`.
 - coverage = scanned blocks / requested blocks (suspect chunks do not count as scanned).
@@ -18,7 +20,7 @@ CLI example (fake owner; <RPC_URL> is a placeholder; finds Approval events where
       --topic1-addr 0x1111111111111111111111111111111111111111 \
       --from-block 26200000 --to-block latest --chunk 5000
 """
-import argparse, json, os, sys, time
+import argparse, json, os, re, sys, time
 from exitkit.rpc import RPC, RPCError, topic_addr
 
 SPLIT_HINTS = ("range", "too many results", "result limit", "results limit", "log limit", "exceed",
@@ -27,7 +29,7 @@ RATE_LIMIT_CODES = (429, -32005)
 RATE_LIMIT_MESSAGES = {
     "429 too many requests", "rate limit", "rate limit exceeded", "rate-limit exceeded",
     "ratelimit", "request rate exceeded", "too many requests", "throttled",
-    "capacity exceeded", "quota exceeded", "limit exceeded",
+    "capacity exceeded", "quota exceeded",
 }
 TIMEOUT_HINTS = ("timeout", "timed out")
 TRUNCATION_CAPS = (1000, 5000, 10000, 20000)
@@ -40,11 +42,19 @@ def _message(value):
 
 
 def _is_rate_limited(value):
-    if isinstance(value, dict) and (value.get("code") in RATE_LIMIT_CODES or
-                                    value.get("http_status") == 429):
+    if isinstance(value, dict) and value.get("http_status") == 429:
         return True
     message = _message(value)
-    return message in RATE_LIMIT_MESSAGES
+    if message in RATE_LIMIT_MESSAGES:
+        return True
+    # Match affirmative phrases at the start, not incidental mentions of rate metadata.
+    if any(re.match(re.escape(phrase) + r"\b", message)
+           for phrase in RATE_LIMIT_MESSAGES - {"rate limit", "ratelimit"}):
+        return True
+    # Providers also use -32005 for oversized queries; split hints win over codes.
+    if any(hint in message for hint in SPLIT_HINTS):
+        return False
+    return isinstance(value, dict) and value.get("code") in RATE_LIMIT_CODES
 
 
 def _is_timeout(value):
@@ -73,6 +83,10 @@ def get_logs(rpc, from_block, to_block, address=None, topics=None, chunk=10_000,
     per-request retries). time_budget: total wall-clock seconds; when exceeded, every chunk not yet
     scanned is listed in `failed` as "time budget exceeded" (UNKNOWN, not empty)."""
     """Returns dict(logs, scanned=[(a,b)], failed=[(a,b,err)], suspect=[(a,b,count)], coverage, rpc_used)."""
+    if chunk < 1:
+        raise ValueError("chunk must be at least 1")
+    if batch < 1:
+        raise ValueError("batch must be at least 1")
     logs, scanned, failed, suspect = [], [], [], []
     used = set()
     queue = []
@@ -165,7 +179,7 @@ def main(argv=None):
     ap.add_argument("--from-block", type=int, required=True)
     ap.add_argument("--to-block", default="latest")
     ap.add_argument("--chunk", type=_positive_int, default=10_000)
-    ap.add_argument("--batch", type=int, default=5, help="getLogs per HTTP batch; use 1 if the node rejects batches")
+    ap.add_argument("--batch", type=_positive_int, default=5, help="getLogs per HTTP batch; use 1 if the node rejects batches")
     ap.add_argument("--retries", type=int, default=3, help="max retries per HTTP request (429/5xx/timeout)")
     ap.add_argument("--timeout", type=float, default=20, help="seconds per HTTP request")
     ap.add_argument("--rate-retries", type=int, default=2, help="max extra tries for a rate-limited / timed-out range")

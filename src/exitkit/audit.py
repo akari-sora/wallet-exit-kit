@@ -18,7 +18,9 @@ Limits: heuristics only. It cannot recognise private labels, balances, people's 
 in prose, or screenshots. A PASS means "no pattern above was found", not "no private data".
 
   exitkit audit <folder> [--allow 0x...]... [--forbid SUBSTR]...
-Exit code 1 if anything needs review or a forbidden substring is found.
+Exit code 1 for review findings, forbidden substrings, or unreadable/unfollowed paths;
+exit code 2 if the input folder does not exist or is not a directory.
+Every hex run of 64 or more characters is displayed as first 4 / last 4 plus length.
 
 The walk skips __pycache__ and checkout tooling directories (.git, .venv, .omc,
 caches, dist, build, *.egg-info). Files that are read use the same classification
@@ -111,6 +113,21 @@ def classify40(h, allow):
 HEXCH = set("0123456789abcdefABCDEF")
 
 
+def _redact_long_hex(text):
+    """Redact long hex at the output boundary, including glued and padded values."""
+    def redact(match):
+        run = match.group(2)
+        if len(run) < 64:
+            return match.group(0)
+        return (match.group(1) or "") + run[:4] + "…" + run[-4:] + f" ({len(run)} hex)"
+
+    return HEX_RUN.sub(redact, text)
+
+
+def _report(text):
+    print(_redact_long_hex(text))
+
+
 def _glued_before(line, p):
     """Hex glued in front of the run that starts at p (directly, or in front of its 0x/0X)."""
     q = p - 2 if p >= 2 and line[p - 2:p] in ("0x", "0X") else p
@@ -142,17 +159,17 @@ def scan_hex(line, allow):
         elif n == 64:
             k = run.lower()
             if k in KNOWN_64:
-                yield pre + run[:10] + "…", "PUBLIC: " + KNOWN_64[k], "64-hex constant"
+                yield pre + run, "PUBLIC: " + KNOWN_64[k], "64-hex constant"
             elif k.startswith("0" * 24):
                 inner = run[24:]
                 yield pre + run, classify40(inner, allow), "32-byte topic-padded address"
             elif is_fake(k):
-                yield pre + run[:10] + "…", "FAKE", "64-hex placeholder"
+                yield pre + run, "FAKE", "64-hex placeholder"
             else:
-                yield pre + run[:4] + "…" + run[-4:], "REVIEW", "64-hex (tx hash / key / signature?)"
+                yield pre + run, "REVIEW", "64-hex (tx hash / key / signature?)"
         elif n > 40:
             if is_fake(run):     # the whole run is one repeated pattern (1111…), nothing hidden
-                yield pre + run[:12] + "…", "FAKE", f"{n}-hex placeholder"
+                yield pre + (run if n >= 64 else run[:12] + "…"), "FAKE", f"{n}-hex placeholder"
             else:
                 # boundary rule: no allowlist / fake credit for an address with hex glued on
                 yield pre + run, "REVIEW", f"{n}-hex run glued to other hex (may hide an address)"
@@ -167,7 +184,7 @@ def main(argv=None):
     ap.add_argument("--forbid", action="append", default=[])
     a = ap.parse_args(argv)
     if not os.path.isdir(a.folder):
-        print(f"ERROR: audit folder does not exist or is not a directory: {a.folder}")
+        _report(f"ERROR: audit folder does not exist or is not a directory: {a.folder}")
         return 2
     allow = dict(PUBLIC)
     allow.update({x.lower().replace("0x", ""): "user allowlist" for x in a.allow})
@@ -178,6 +195,11 @@ def main(argv=None):
         errors.append((os.path.relpath(path, a.folder), error))
 
     for root, dirs, files in os.walk(a.folder, onerror=walk_error):
+        for d in dirs[:]:
+            path = os.path.join(root, d)
+            if os.path.islink(path):
+                errors.append((os.path.relpath(path, a.folder), "symlinked directory not followed"))
+                dirs.remove(d)
         dirs[:] = [d for d in dirs if not _skip_dir(d)]
         for fn in files:
             p = os.path.join(root, fn)
@@ -200,8 +222,8 @@ def main(argv=None):
                         hits.append((i, m.group(0), "REVIEW", label))
             # split-across-lines pass: a line ending in a 20-39 hex run + next line starting with hex
             for i in range(len(lines) - 1):
-                m1 = re.search(r"(?:0[xX])?([0-9a-fA-F]{8,39})\s*$", lines[i])
-                m2 = re.match(r"^\s*([0-9a-fA-F]{1,40})", lines[i + 1])
+                m1 = re.search(r"(?<![0-9a-fA-F])(?:0[xX])?([0-9a-fA-F]{8,39})\s*$", lines[i])
+                m2 = re.match(r"^\s*([0-9a-fA-F]{1,40})(?![0-9a-fA-FxX])", lines[i + 1])
                 if m1 and m2 and len(m1.group(1)) + len(m2.group(1)) == 40:
                     joined = m1.group(1) + m2.group(1)
                     hits.append((i + 1, "0x" + joined, classify40(joined, allow), "address split across lines"))
@@ -211,13 +233,13 @@ def main(argv=None):
                 if kind == "REVIEW":
                     review.append((rel, i, disp, note))
     for (disp, kind, note), locs in sorted(seen.items(), key=lambda x: (x[0][1], x[0][0])):
-        print(f"{kind:58s} {disp}  [{note}]  ({len(locs)}x: {', '.join(locs[:3])}{' …' if len(locs) > 3 else ''})")
+        _report(f"{kind:58s} {disp}  [{note}]  ({len(locs)}x: {', '.join(locs[:3])}{' …' if len(locs) > 3 else ''})")
     for rel, i, s in forbidden:
-        print(f"FORBIDDEN substring {s!r} at {rel}:{i}")
+        _report(f"FORBIDDEN substring {s!r} at {rel}:{i}")
     for rel, error in errors:
-        print(f"ERROR: cannot read {rel}: {error}")
+        _report(f"ERROR: cannot read {rel}: {error}")
     ok = not review and not forbidden and not errors
-    print(f"RESULT: {'PASS' if ok else 'FAIL'}  unique_hits={len(seen)} review={len(review)} "
+    _report(f"RESULT: {'PASS' if ok else 'FAIL'}  unique_hits={len(seen)} review={len(review)} "
           f"forbidden_hits={len(forbidden)} read_errors={len(errors)}")
     return 0 if ok else 1
 
