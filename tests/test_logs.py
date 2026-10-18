@@ -3,7 +3,7 @@ import urllib.error
 
 import pytest
 
-from exitkit.logs import get_logs, main as logs_main
+from exitkit.logs import _is_rate_limited, get_logs, main as logs_main
 from exitkit.rpc import READ_METHODS, BatchResult, RPC
 from tests.fake_rpc import jsonrpc_err, jsonrpc_ok, routed
 
@@ -26,6 +26,13 @@ def test_time_budget_marks_unscanned_ranges_unknown():
     "429 too many requests",
     {"code": -32000, "message": "rate limit exceeded, retry later"},
     {"code": -32000, "message": "too many requests, retry later"},
+    "rate limit reached; retry after 10000 ms",
+    {"code": -32005, "message": "rate limit reached; retry after 10000 ms"},
+    {"code": -32005, "message": "project ID request rate exceeded"},
+    {"code": 429, "message": "project ID request rate exceeded"},
+    {"code": 429, "message": "query returned more than 10000 results"},
+    {"http_status": 429, "message": "project ID request rate exceeded"},
+    {"http_status": 429, "message": "block range too large"},
 ])
 def test_rate_limit_does_not_split(error):
     requested_ranges = []
@@ -125,8 +132,10 @@ def test_http_429_transport_error_is_rate_limited_without_a_socket(monkeypatch):
     assert ok is False
     assert isinstance(error, dict)
     assert error["http_status"] == 429
-    # Remove all textual 429 clues: classification must use propagated status.
+    # Check structured classification and reject an incidental textual 429 match.
     error["message"] = "provider busy"
+    assert _is_rate_limited(error) is True
+    assert _is_rate_limited({"message": "provider busy; reference 429"}) is False
     monkeypatch.setattr(rpc, "batch", lambda calls: batch_result)
     result = get_logs(rpc, 0, 0, chunk=1, rate_retries=0, time_budget=30)
     assert "rate-limited" in result["failed"][0][2]

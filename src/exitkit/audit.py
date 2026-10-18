@@ -124,8 +124,14 @@ def _redact_long_hex(text):
     return HEX_RUN.sub(redact, text)
 
 
-def _report(text):
-    print(_redact_long_hex(text))
+def _report(text, *, file=None, end="\n"):
+    print(_redact_long_hex(text), file=file, end=end)
+
+
+class _AuditParser(argparse.ArgumentParser):
+    def _print_message(self, message, file=None):
+        if message:
+            _report(message, file=file or sys.stderr, end="")
 
 
 def _glued_before(line, p):
@@ -178,7 +184,7 @@ def scan_hex(line, allow):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(prog="exitkit audit")
+    ap = _AuditParser(prog="exitkit audit")
     ap.add_argument("folder")
     ap.add_argument("--allow", action="append", default=[])
     ap.add_argument("--forbid", action="append", default=[])
@@ -223,7 +229,7 @@ def main(argv=None):
             # split-across-lines pass: a line ending in a 20-39 hex run + next line starting with hex
             for i in range(len(lines) - 1):
                 m1 = re.search(r"(?<![0-9a-fA-F])(?:0[xX])?([0-9a-fA-F]{8,39})\s*$", lines[i])
-                m2 = re.match(r"^\s*([0-9a-fA-F]{1,40})(?![0-9a-fA-FxX])", lines[i + 1])
+                m2 = re.match(r"^\s*(?!0[xX])([0-9a-fA-F]{1,40})(?![0-9a-fA-F])", lines[i + 1])
                 if m1 and m2 and len(m1.group(1)) + len(m2.group(1)) == 40:
                     joined = m1.group(1) + m2.group(1)
                     hits.append((i + 1, "0x" + joined, classify40(joined, allow), "address split across lines"))

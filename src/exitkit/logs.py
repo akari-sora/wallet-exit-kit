@@ -4,9 +4,9 @@
 - Splits [from, to] into chunks; on "range too large / too many results / limit" errors
   the chunk is halved and retried (down to min_chunk).
 - Chunks that still fail are listed in `failed`; they are NOT treated as "no events".
-- Structured HTTP 429 status and explicit rate-limit phrases (including retry instructions)
-  keep the same range. Otherwise, range/result split hints take precedence over RPC rate-limit
-  codes (including Infura -32005). Generic "limit exceeded" is a split hint.
+- Structured HTTP or JSON-RPC 429 and explicit rate-limit phrases (including retry instructions)
+  keep the same range. Otherwise, range/result split hints take precedence over the ambiguous
+  RPC code -32005. Generic "limit exceeded" is a split hint.
 - Rate limits and timeouts are retried with backoff; exhausted retries are listed in `failed`.
 - A chunk whose result count hits a common provider cap (1000 / 5000 / 10000 / 20000) is treated
   as possibly truncated: it is split and re-scanned; at min_chunk it is listed in `suspect`.
@@ -30,6 +30,7 @@ RATE_LIMIT_MESSAGES = {
     "429 too many requests", "rate limit", "rate limit exceeded", "rate-limit exceeded",
     "ratelimit", "request rate exceeded", "too many requests", "throttled",
     "capacity exceeded", "quota exceeded",
+    "rate limit reached", "project id request rate exceeded",
 }
 TIMEOUT_HINTS = ("timeout", "timed out")
 TRUNCATION_CAPS = (1000, 5000, 10000, 20000)
@@ -42,7 +43,7 @@ def _message(value):
 
 
 def _is_rate_limited(value):
-    if isinstance(value, dict) and value.get("http_status") == 429:
+    if isinstance(value, dict) and (value.get("http_status") == 429 or value.get("code") == 429):
         return True
     message = _message(value)
     if message in RATE_LIMIT_MESSAGES:
@@ -51,7 +52,7 @@ def _is_rate_limited(value):
     if any(re.match(re.escape(phrase) + r"\b", message)
            for phrase in RATE_LIMIT_MESSAGES - {"rate limit", "ratelimit"}):
         return True
-    # Providers also use -32005 for oversized queries; split hints win over codes.
+    # Providers also use -32005 for oversized queries; split hints win over that code.
     if any(hint in message for hint in SPLIT_HINTS):
         return False
     return isinstance(value, dict) and value.get("code") in RATE_LIMIT_CODES

@@ -7,7 +7,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 INDEX_INSTALL = re.compile(
     r"\b(?:(?:pip(?:3)?|pipx|uv\s+(?:tool|pip))\s+install|"
-    r"pipx\s+run|uv\s+add|uvx)\b"
+    r"pipx\s+run|uv\s+tool\s+run|uv\s+run\s+[^\n`;&|]*?--with|uv\s+add|uvx)\b"
     r"[^\n`;&|]*?(?<![\w./-])(?:wallet[-_.]+exit[-_.]+kit|exitkit)"
     r"(?=$|[\s`'\"\[<>=!~])",
     re.IGNORECASE,
@@ -36,6 +36,10 @@ def test_docs_do_not_install_by_index_name():
     "pip install wallet.exit.kit",
     "pip install wallet_exit_kit",
     "pip install Wallet..__--Exit._Kit",
+    "uv tool run exitkit",
+    "uv tool run wallet.exit.kit",
+    "uv run --with exitkit python script.py",
+    "uv run --with=Wallet..__--Exit._Kit python script.py",
 ])
 def test_index_install_guard_detects_package_names(command):
     assert INDEX_INSTALL.search(command)

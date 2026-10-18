@@ -9,9 +9,9 @@
 ### Fixed
 
 - Fail approval assertions when the checked owner differs from the simulated owner; reject malformed topic addresses and chunk/batch sizes below 1 before RPC use, including direct `get_logs` calls.
-- Make missing or unreadable audit inputs and unfollowed symlinked directories fail. Display every hex run of 64 or more characters as first 4 / last 4 plus length, including glued/padded values, signatures, seeds, forbidden substrings and paths; prevent the split-line scan from exposing long-run fragments.
-- Preserve range splitting for generic `limit exceeded` and Infura -32005 result/range errors. Recognize rate-limit phrases with retry instructions without splitting; verify HTTP 429 status propagation with an opaque message.
-- Require checksum-verified GitLab release assets in installation guidance, with an explicit warning against installing this toolkit from PyPI. Guard against `uvx`, `uv add`, `pipx run` and PEP 503 normalized package names as well as pip installs.
+- Make missing or unreadable audit inputs and unfollowed symlinked directories fail. Display every hex run of 64 or more characters as first 4 / last 4 plus length, including glued/padded values, signatures, seeds, forbidden substrings, paths and argparse diagnostics; prevent the split-line scan from exposing long-run fragments while detecting split addresses followed by non-hex `x`/`X` boundaries.
+- Preserve range splitting for generic `limit exceeded` and Infura -32005 result/range errors. HTTP and JSON-RPC 429 override split hints; retry-after and Infura project-rate messages keep the same range. Verify HTTP 429 status propagation and distinguish structured status from incidental `429` text.
+- Require checksum-verified GitLab release assets in installation guidance, with an explicit warning against installing this toolkit from PyPI. Guard against `uvx`, `uv add`, `uv tool run`, `uv run --with`, `pipx run` and PEP 503 normalized package names as well as pip installs.
 - Add regression tests for these cases.
 
 ## [0.1.0] - 2026-10-17

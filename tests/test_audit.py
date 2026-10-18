@@ -52,6 +52,38 @@ def test_known_topic_passes_and_a_split_address_does_not(tmp_path, capsys):
     assert "split across lines" in capsys.readouterr().out
 
 
+@pytest.mark.parametrize("suffix", ["x", "X"])
+def test_split_address_allows_nonhex_x_boundary(tmp_path, capsys, suffix):
+    body = mixed_body()
+    (tmp_path / "split.txt").write_text(body[:20] + "\n" + body[20:] + suffix + "\n")
+    assert audit_main([str(tmp_path)]) == 1
+    assert "address split across lines" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("prefix", ["0x", "0X"])
+def test_split_scan_does_not_join_a_prefix_from_the_next_line(tmp_path, capsys, prefix):
+    secret = hashlib.sha256(b"synthetic split prefix regression").hexdigest()
+    (tmp_path / "secret.txt").write_text(mixed_body()[:39] + "\n" + prefix + secret + "\n")
+    assert audit_main([str(tmp_path)]) == 1
+    out = capsys.readouterr().out
+    assert "address split across lines" not in out
+    assert secret not in out
+
+
+@pytest.mark.parametrize("length", [64, 65, 128])
+@pytest.mark.parametrize("option", ["", "--unknown="])
+def test_parser_errors_redact_long_hex(tmp_path, capsys, length, option):
+    secret = (hashlib.sha256(b"synthetic parser redaction regression").hexdigest() * 2)[:length]
+    with pytest.raises(SystemExit) as exc:
+        audit_main([str(tmp_path), option + secret])
+    assert exc.value.code == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "unrecognized arguments" in captured.err
+    assert secret not in captured.err
+    assert secret[:4] + "…" + secret[-4:] + f" ({length} hex)" in captured.err
+
+
 def test_venv_is_skipped_and_the_same_address_outside_is_not(tmp_path, capsys):
     body = mixed_body()
     hidden = tmp_path / ".venv" / "lib.txt"
