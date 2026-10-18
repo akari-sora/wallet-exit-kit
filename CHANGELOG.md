@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- Shareable Grok Bot template v1.1.0: the rules pin the watch-only `guardian` CLI v0.4.0-rc.6 (wheel and constraints.txt by SHA-256) instead of rc.5. Red-team summary adds the rc.6 install re-test. Same public link, updated in place.
+
 ## [0.1.0] - 2026-10-17
 
 First release. Read-only: nothing in this kit holds keys, signs or broadcasts.

@@ -1,12 +1,12 @@
-# Wallet Guardian 錢包守護: shareable Grok Bot (v1.0.0)
+# Wallet Guardian 錢包守護: shareable Grok Bot (v1.1.0)
 
-Version 1.0.0, published 2026-10-17 as a public Grok Bot template.
+Version 1.1.0, published 2026-10-18 as a public Grok Bot template (same link as 1.0.0, updated in place). The only change from 1.0.0: the rules install the `guardian` CLI v0.4.0-rc.6 instead of rc.5.
 
 - **Add it:** open https://x.ai/bot/TSOnLDpWzPi39xvgxjEtu in a browser and press "Add to Grok Bot". You need the Grok Bot app. The bot is copied into your own account; nothing from the publisher's account (computer, logins, chats, memory) comes with it.
 - **What it does:** watches public crypto addresses you type: assets, approvals and DeFi positions per chain, approval risk grades, revoke and exit check cards that you sign yourself in your own wallet, deadline reminders, and a public campaign radar.
 - **What it never does:** sign, send or broadcast; take seed phrases, private keys or passwords; give investment advice. Only the owner's own messages count. The only wallet request it may give is a plain-text EIP-681 URI (not a clickable link) that sets an ERC-20 approval to exactly 0, only after a full simulation of that approval reset, which you check and sign yourself in your own wallet.
 - **What the template contains:** the instructions in `BOT-DESCRIPTION.txt` and four skills, unedited: `wallet-guardian-rules` (read first, always wins), `wallet-guardian-welcome` (first message), `wallet-guardian-onchain-exit`, `wallet-guardian-campaign-radar`. No memory, no routines, no plugins, no addresses, no keys.
-- **Optional CLI:** the rules can install the watch-only `guardian` CLI v0.4.0-rc.5 from https://gitlab.com/aa22396584/wallet-guardian/-/releases/v0.4.0-rc.5, with the wheel and constraints.txt pinned by SHA-256 (dependencies are pinned by version only), only after you agree to the install batch.
+- **Optional CLI:** the rules can install the watch-only `guardian` CLI v0.4.0-rc.6 from https://gitlab.com/aa22396584/wallet-guardian/-/releases/v0.4.0-rc.6, with the wheel and constraints.txt pinned by SHA-256 (dependencies are pinned by version only), only after you agree to the install batch.
 - **Testing:** `REDTEAM-SUMMARY.md` lists the 2026-10-17 red-team run on public addresses (S01 to S16 plus a transcript audit). S03 to S16 and the audit are PASS. S01, S01b and S02 were PARTIAL; after the fixes the red-team bot re-ran S01 and S02 and reported PASS (those re-runs are not listed row by row). This is a test record, not a security guarantee.
 
 Manual setup instead of the share link: create a bot, paste `BOT-DESCRIPTION.txt` as its instructions, and add the four folders under `skills/` to the skill library. Grok Bot keeps one skill library per account, so every bot on that account sees these skills.
