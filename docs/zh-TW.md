@@ -166,7 +166,7 @@ exitkit decode request.json --expect-chain-id 1
 
 ### `exitkit audit`
 
-啟發式掃描一個資料夾裡的地址和幾種機敏樣式（長 hex、看起來像帳號的 @ 名稱、email、家目錄路徑等）。公開的 Multicall3、Uniswap Permit2、原生幣佔位地址、零地址、precompile 1、已知事件 topic，明顯的假地址（例如 `0x1111…1111`）、幾個固定的公開字串（Telegram 官方的 bot 建立帳號、`@username` 這類通用佔位字、`name.eth` 範例、Grok Bot 平台的 skill 資料夾），以及 `SHA256SUMS` 檔裡跟所列檔案相符的雜湊，都不算需要覆核。這些地址如果和別的 hex 黏在一起，整串仍然要覆核。有東西要覆核時結束碼是 1。
+啟發式掃描一個資料夾裡的地址和幾種機敏樣式（長 hex、看起來像帳號的 @ 名稱、email、家目錄路徑等）。公開的 Multicall3、Uniswap Permit2、原生幣佔位地址、零地址、precompile 1、已知事件 topic、明顯的假地址（例如 `0x1111…1111`）、幾個固定的公開字串（Telegram 官方的 bot 建立帳號、`@username` 這類通用佔位字、`name.eth` 範例、Grok Bot 平台的 skill 資料夾），以及 `SHA256SUMS` 檔裡跟所列檔案相符的雜湊，都不算需要覆核。這些地址如果和別的 hex 黏在一起，整串仍然要覆核。有東西要覆核時結束碼是 1。
 
 ```bash
 exitkit audit .

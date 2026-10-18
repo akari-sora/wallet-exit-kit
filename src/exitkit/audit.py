@@ -223,7 +223,7 @@ SUMS_LINE = re.compile(r"^([0-9a-fA-F]{64}) [ *](\S.*)$")
 
 
 def _verified_sums(folder, text):
-    """Hashes in a SHA256SUMS file whose listed file (inside the same folder, not a symlink) really has that SHA-256."""
+    """Hashes in a SHA256SUMS file whose listed file (same folder or below, not a symlink) really has that SHA-256."""
     found = {}
     base = os.path.realpath(folder)
     for line in text.splitlines():
