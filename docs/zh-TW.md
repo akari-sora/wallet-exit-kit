@@ -12,6 +12,8 @@ GitLab 是主版本：https://gitlab.com/aa22396584/wallet-exit-kit 。Issue 和
 
 只從 GitLab Releases 下載：https://gitlab.com/aa22396584/wallet-exit-kit/-/releases 。這個套件本身不從套件索引安裝（pip 仍會從 PyPI 下載建置工具 setuptools）。需要 Python 3.12 以上。
 
+禁止從 PyPI 安裝 `wallet-exit-kit` 或 `exitkit`，也不要用 pip、pipx 或 uv 按套件名稱安裝。只安裝經 `SHA256SUMS` 核對通過的 GitLab release 檔案。
+
 **1. 下載。** 把 `SHA256SUMS` 和它列出的每一個檔案放進同一個空目錄。下面的檔名是佔位字（`wallet-exit-kit-<version>.tar.gz`），請換成那一版 `SHA256SUMS` 裡的名稱。壓縮檔是完整的原始碼樹（含 skills、templates、docs），不是 Python sdist。
 
 **2. 核對雜湊。** 第一行用在 Linux，第二行用在 macOS。缺檔或雜湊不符都會失敗；失敗就不要安裝。
@@ -32,7 +34,7 @@ python3 -m venv .venv
 .venv/bin/exitkit install
 ```
 
-Releases 頁面上如果還沒有帶 `SHA256SUMS` 的版本，就沒有東西可以核對。這時改用 GitLab checkout（`git clone https://gitlab.com/aa22396584/wallet-exit-kit.git`，進去後照同樣的 venv 步驟），照下方「安裝 CLI」安裝。使用任何一張卡之前，先讀「只讀、不簽、不送」和「已知限制」。
+Releases 頁面上如果還沒有帶 `SHA256SUMS` 的版本，就停止安裝：目前沒有可驗證的 release 檔案。使用任何一張卡之前，先讀「只讀、不簽、不送」和「已知限制」。
 
 授權：AGPL-3.0-only。
 
@@ -53,6 +55,8 @@ Releases 頁面上如果還沒有帶 `SHA256SUMS` 的版本，就沒有東西可
 ## 安裝 CLI
 
 需要 Python 3.12 以上。工具本身只用標準庫。pytest 只在 `dev` extra，不是執行時依賴。
+
+先依「快速開始」核對雜湊，再解壓 release 壓縮檔，於解壓後的目錄執行下列指令。
 
 ```bash
 python3 -m venv .venv

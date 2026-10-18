@@ -16,6 +16,8 @@ Chinese notes: [docs/zh-TW.md](docs/zh-TW.md).
 
 Download only from GitLab Releases: https://gitlab.com/aa22396584/wallet-exit-kit/-/releases . The package itself is not installed from a package index (pip still downloads its build tool, setuptools, from PyPI). Needs Python 3.12 or newer.
 
+Do not install `wallet-exit-kit` or `exitkit` from PyPI, including by name with pip, pipx, or uv. Install only the GitLab release asset after checking `SHA256SUMS`.
+
 **1. Download.** Put `SHA256SUMS` and every file it lists in one empty directory. The file names below are placeholders (`wallet-exit-kit-<version>.tar.gz`). Use the names in that release's `SHA256SUMS`. The archive is the full source tree (skills, templates and docs included), not a Python sdist.
 
 **2. Verify.** Run one of these lines in that directory: the first on Linux, the second on macOS. A missing file or a mismatch fails. Do not install a file that fails.
@@ -36,7 +38,7 @@ python3 -m venv .venv
 .venv/bin/exitkit install
 ```
 
-If the Releases page has no release with a `SHA256SUMS` file, there is nothing to verify. In that case install from a GitLab checkout (`git clone https://gitlab.com/aa22396584/wallet-exit-kit.git`, then the same venv steps inside it), as in [Install the CLI](#install-the-cli). Before you use a card, read [Read-only, no signing, no sending](#read-only-no-signing-no-sending) and [Known limitations](#known-limitations).
+If the Releases page has no release with a `SHA256SUMS` file, stop: there is no verified release asset to install. Before you use a card, read [Read-only, no signing, no sending](#read-only-no-signing-no-sending) and [Known limitations](#known-limitations).
 
 ## Read-only, no signing, no sending
 
@@ -53,6 +55,8 @@ This package does not claim to cover every chain, and it does not claim that a c
 ## Install the CLI
 
 Python 3.12 or newer. The toolkit code uses the standard library. pytest is the `dev` extra, not a runtime dependency.
+
+Run these commands inside the release archive extracted after the [Quick start](#quick-start) checksum verification.
 
 ```bash
 python3 -m venv .venv

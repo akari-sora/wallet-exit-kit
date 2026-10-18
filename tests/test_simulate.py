@@ -110,6 +110,26 @@ def test_nonzero_approval_fails_and_zero_approval_does_not():
     assert check(clean, _required(owner))["pass"] is True
 
 
+def test_approval_owner_mismatch_fails_closed():
+    owner, sim = _run(_pass_result())
+    sim["txs"][0]["logs"].append({
+        "address": _token(),
+        "topics": [APPROVAL, topic_addr(owner), topic_addr(_spender())],
+        "data": hex(2**256 - 1),
+    })
+    report = check(sim, _required(_spender()))
+    assert report["pass"] is False
+    result = report["results"][-1]
+    assert result["pass"] is False
+    assert "owner mismatch" in result["detail"]
+
+
+def test_approval_owner_comparison_is_case_insensitive():
+    _owner_value, sim = _run(_pass_result())
+    sim["owner"] = "0x" + "aB" * 20
+    assert check(sim, _required(sim["owner"].lower()))["pass"] is True
+
+
 def test_incomplete_simulation_is_not_a_pass():
     owner, sim = _run([])
     assert sim["ok"] is False

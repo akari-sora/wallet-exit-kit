@@ -6,6 +6,14 @@
 
 - Shareable Grok Bot template v1.1.0: the rules pin the watch-only `guardian` CLI v0.4.0-rc.6 (wheel and constraints.txt by SHA-256) instead of rc.5. Red-team summary adds the rc.6 install re-test. Same public link, updated in place.
 
+### Fixed
+
+- Fail approval assertions when the checked owner differs from the simulated owner; reject malformed topic addresses and chunk/batch sizes below 1 before RPC use, including direct `get_logs` calls.
+- Make missing or unreadable audit inputs and unfollowed symlinked directories fail. Display every hex run of 64 or more characters as first 4 / last 4 plus length, including glued/padded values, signatures, seeds, forbidden substrings, paths and argparse diagnostics; prevent the split-line scan from exposing long-run fragments while detecting split addresses followed by non-hex `x`/`X` boundaries.
+- Preserve range splitting for generic `limit exceeded` and Infura -32005 result/range errors. HTTP and JSON-RPC 429 override split hints; retry-after and Infura project-rate messages keep the same range. Verify HTTP 429 status propagation and distinguish structured status from incidental `429` text.
+- Require checksum-verified GitLab release assets in installation guidance, with an explicit warning against installing this toolkit from PyPI. Guard against `uvx`, `uv add`, `uv tool run`, `uv run --with`, `pipx run` and PEP 503 normalized package names as well as pip installs.
+- Add regression tests for these cases.
+
 ## [0.1.0] - 2026-10-17
 
 First release. Read-only: nothing in this kit holds keys, signs or broadcasts.

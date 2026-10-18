@@ -67,7 +67,7 @@ description: "當使用者想盤點錢包在多條 EVM 鏈上的資產與授權�
 
 ## 輔助腳本（Python 標準庫；不簽名、不廣播）
 
-這些指令需要已安裝的 `exitkit` 套件。在這個倉庫執行 `pip install -e .`，或安裝已發佈的套件（`wallet-exit-kit`）。只複製或連結 `skills/onchain-exit-assist` 不夠：`scripts/` 裡的包裝會 `import exitkit`。確認方式：`python -c "import exitkit"` 沒有錯誤，而且 `exitkit --help` 列得出 `rpc`、`logs`、`simulate`、`decode`、`audit`、`disclose`、`install`。
+這些指令需要已安裝的 `exitkit` 套件。只從 GitLab Releases（https://gitlab.com/aa22396584/wallet-exit-kit/-/releases）下載 release 壓縮檔及 `SHA256SUMS`，先執行 `sha256sum -c SHA256SUMS`（macOS 用 `shasum -a 256 -c SHA256SUMS`），全部通過才解壓並在該目錄的虛擬環境執行 `pip install -e .`。缺少檔案或核對失敗就停止。禁止從 PyPI 安裝 `wallet-exit-kit` 或 `exitkit`，也不要用 pip、pipx 或 uv 按套件名稱從索引安裝。只複製或連結 `skills/onchain-exit-assist` 不夠：`scripts/` 裡的包裝會 `import exitkit`。確認方式：`python -c "import exitkit"` 沒有錯誤，而且 `exitkit --help` 列得出 `rpc`、`logs`、`simulate`、`decode`、`audit`、`disclose`、`install`。
 
 | 檔案 | 用途 | 會寫檔或連網嗎 |
 |---|---|---|

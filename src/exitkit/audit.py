@@ -18,13 +18,15 @@ Limits: heuristics only. It cannot recognise private labels, balances, people's 
 in prose, or screenshots. A PASS means "no pattern above was found", not "no private data".
 
   exitkit audit <folder> [--allow 0x...]... [--forbid SUBSTR]...
-Exit code 1 if anything needs review or a forbidden substring is found.
+Exit code 1 for review findings, forbidden substrings, or unreadable/unfollowed paths;
+exit code 2 if the input folder does not exist or is not a directory.
+Every hex run of 64 or more characters is displayed as first 4 / last 4 plus length.
 
 The walk skips __pycache__ and checkout tooling directories (.git, .venv, .omc,
 caches, dist, build, *.egg-info). Files that are read use the same classification
 rules as before.
 """
-import argparse, os, re, sys
+import argparse, os, re, sys, tokenize
 
 # Tooling and VCS trees are not project source. A checkout is scanned after
 # `python3 -m venv .venv`, and local agent state may hold machine paths.
@@ -87,10 +89,40 @@ OTHER = [
                                        r"(?=[1-9A-HJ-NP-Za-km-z]*[a-z])[1-9A-HJ-NP-Za-km-z]{26,44}(?![0-9A-Za-z])")),
     ("ENS name", re.compile(r"\b[a-z0-9-]{3,}\.eth\b", re.I)),
     ("email", re.compile(r"\b[\w.+-]+@[\w-]+\.[\w.-]+\b")),
-    ("social handle", re.compile(r"(?<![\w.@/])" + "@" + r"[A-Za-z0-9_]{3,15}\b")),
+    ("social handle", re.compile(r"(?<![\w.@/])" + "@" + r"[A-Za-z0-9_]{3,30}\b")),
+    # personal profile URLs on social hosts (public org feeds on other hosts are not flagged)
+    ("profile URL", re.compile(r"https?://(?:www\.)?(?:threads\.(?:net|com)|medium\.com|youtube\.com|tiktok\.com|"
+                               r"mastodon\.social|warpcast\.com|farcaster\.xyz)/" + "@" + r"[A-Za-z0-9_.]{2,30}", re.I)),
     # patterns are split so this file does not match itself
     ("internal path", re.compile("(" + "/ho" + r"me/\w|/Us" + r"ers/\w|/work" + "space/|/ro" + "ot/|" + r"[A-Z]:\\Us" + r"ers\\)")),
 ]
+
+
+def _python_decorator_lines(rel, lines):
+    """Line numbers where a real decorator starts, found with the tokenizer so strings and docstrings never count."""
+    if not rel.endswith(".py"):
+        return set()
+    found, line_start = set(), True
+    try:
+        # Feed the same physical lines the scanner numbers, so line numbers always agree.
+        feed = iter([ln + "\n" for ln in lines])
+        for tok in tokenize.generate_tokens(lambda: next(feed, "")):
+            if tok.type in (tokenize.NEWLINE, tokenize.NL):
+                line_start = True
+                continue
+            if tok.type in (tokenize.INDENT, tokenize.DEDENT, tokenize.COMMENT):
+                continue
+            if line_start and tok.type == tokenize.OP and tok.string == "@":
+                found.add(tok.start[0])
+            line_start = False
+    except (tokenize.TokenError, SyntaxError):
+        return set()
+    return found
+
+
+def _is_python_decorator(decorator_lines, lineno, line, m):
+    """A social-handle match that is the decorator token at the start of a decorator line."""
+    return lineno in decorator_lines and not line[:m.start()].strip()
 
 
 def is_fake(h):
@@ -109,6 +141,27 @@ def classify40(h, allow):
 
 
 HEXCH = set("0123456789abcdefABCDEF")
+
+
+def _redact_long_hex(text):
+    """Redact long hex at the output boundary, including glued and padded values."""
+    def redact(match):
+        run = match.group(2)
+        if len(run) < 64:
+            return match.group(0)
+        return (match.group(1) or "") + run[:4] + "…" + run[-4:] + f" ({len(run)} hex)"
+
+    return HEX_RUN.sub(redact, text)
+
+
+def _report(text, *, file=None, end="\n"):
+    print(_redact_long_hex(text), file=file, end=end)
+
+
+class _AuditParser(argparse.ArgumentParser):
+    def _print_message(self, message, file=None):
+        if message:
+            _report(message, file=file or sys.stderr, end="")
 
 
 def _glued_before(line, p):
@@ -142,17 +195,17 @@ def scan_hex(line, allow):
         elif n == 64:
             k = run.lower()
             if k in KNOWN_64:
-                yield pre + run[:10] + "…", "PUBLIC: " + KNOWN_64[k], "64-hex constant"
+                yield pre + run, "PUBLIC: " + KNOWN_64[k], "64-hex constant"
             elif k.startswith("0" * 24):
                 inner = run[24:]
                 yield pre + run, classify40(inner, allow), "32-byte topic-padded address"
             elif is_fake(k):
-                yield pre + run[:10] + "…", "FAKE", "64-hex placeholder"
+                yield pre + run, "FAKE", "64-hex placeholder"
             else:
                 yield pre + run, "REVIEW", "64-hex (tx hash / key / signature?)"
         elif n > 40:
             if is_fake(run):     # the whole run is one repeated pattern (1111…), nothing hidden
-                yield pre + run[:12] + "…", "FAKE", f"{n}-hex placeholder"
+                yield pre + (run if n >= 64 else run[:12] + "…"), "FAKE", f"{n}-hex placeholder"
             else:
                 # boundary rule: no allowlist / fake credit for an address with hex glued on
                 yield pre + run, "REVIEW", f"{n}-hex run glued to other hex (may hide an address)"
@@ -161,24 +214,39 @@ def scan_hex(line, allow):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(prog="exitkit audit")
+    ap = _AuditParser(prog="exitkit audit")
     ap.add_argument("folder")
     ap.add_argument("--allow", action="append", default=[])
     ap.add_argument("--forbid", action="append", default=[])
     a = ap.parse_args(argv)
+    if not os.path.isdir(a.folder):
+        _report(f"ERROR: audit folder does not exist or is not a directory: {a.folder}")
+        return 2
     allow = dict(PUBLIC)
     allow.update({x.lower().replace("0x", ""): "user allowlist" for x in a.allow})
-    review, seen, forbidden = [], {}, []
-    for root, dirs, files in os.walk(a.folder):
+    review, seen, forbidden, errors = [], {}, [], []
+
+    def walk_error(error):
+        path = error.filename or a.folder
+        errors.append((os.path.relpath(path, a.folder), error))
+
+    for root, dirs, files in os.walk(a.folder, onerror=walk_error):
+        for d in dirs[:]:
+            path = os.path.join(root, d)
+            if os.path.islink(path):
+                errors.append((os.path.relpath(path, a.folder), "symlinked directory not followed"))
+                dirs.remove(d)
         dirs[:] = [d for d in dirs if not _skip_dir(d)]
         for fn in files:
             p = os.path.join(root, fn)
             rel = os.path.relpath(p, a.folder)
             try:
                 text = open(p, encoding="utf-8", errors="replace").read()
-            except OSError:
+            except OSError as e:
+                errors.append((rel, e))
                 continue
             lines = text.splitlines()
+            decorators = _python_decorator_lines(rel, lines)
             hits = []
             for i, line in enumerate(lines, 1):
                 for s in a.forbid:
@@ -188,11 +256,13 @@ def main(argv=None):
                     hits.append((i, disp, kind, note))
                 for label, rx in OTHER:
                     for m in rx.finditer(line):
+                        if label == "social handle" and _is_python_decorator(decorators, i, line, m):
+                            continue
                         hits.append((i, m.group(0), "REVIEW", label))
             # split-across-lines pass: a line ending in a 20-39 hex run + next line starting with hex
             for i in range(len(lines) - 1):
-                m1 = re.search(r"(?:0[xX])?([0-9a-fA-F]{8,39})\s*$", lines[i])
-                m2 = re.match(r"^\s*([0-9a-fA-F]{1,40})", lines[i + 1])
+                m1 = re.search(r"(?<![0-9a-fA-F])(?:0[xX])?([0-9a-fA-F]{8,39})\s*$", lines[i])
+                m2 = re.match(r"^\s*(?!0[xX])([0-9a-fA-F]{1,40})(?![0-9a-fA-F])", lines[i + 1])
                 if m1 and m2 and len(m1.group(1)) + len(m2.group(1)) == 40:
                     joined = m1.group(1) + m2.group(1)
                     hits.append((i + 1, "0x" + joined, classify40(joined, allow), "address split across lines"))
@@ -202,12 +272,14 @@ def main(argv=None):
                 if kind == "REVIEW":
                     review.append((rel, i, disp, note))
     for (disp, kind, note), locs in sorted(seen.items(), key=lambda x: (x[0][1], x[0][0])):
-        print(f"{kind:58s} {disp}  [{note}]  ({len(locs)}x: {', '.join(locs[:3])}{' …' if len(locs) > 3 else ''})")
+        _report(f"{kind:58s} {disp}  [{note}]  ({len(locs)}x: {', '.join(locs[:3])}{' …' if len(locs) > 3 else ''})")
     for rel, i, s in forbidden:
-        print(f"FORBIDDEN substring {s!r} at {rel}:{i}")
-    ok = not review and not forbidden
-    print(f"RESULT: {'PASS' if ok else 'FAIL'}  unique_hits={len(seen)} review={len(review)} "
-          f"forbidden_hits={len(forbidden)}")
+        _report(f"FORBIDDEN substring {s!r} at {rel}:{i}")
+    for rel, error in errors:
+        _report(f"ERROR: cannot read {rel}: {error}")
+    ok = not review and not forbidden and not errors
+    _report(f"RESULT: {'PASS' if ok else 'FAIL'}  unique_hits={len(seen)} review={len(review)} "
+          f"forbidden_hits={len(forbidden)} read_errors={len(errors)}")
     return 0 if ok else 1
 
 
