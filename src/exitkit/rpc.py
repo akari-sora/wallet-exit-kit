@@ -31,7 +31,7 @@ Example (fake address; <RPC_URL> is a placeholder you must fill in):
                    ("eth_getTransactionCount", [owner, hex(blk)])])
     print(res.values, res.rpc_used, r.disclosure())
 """
-import json, random, time, unicodedata, urllib.request, urllib.error
+import json, random, re, time, unicodedata, urllib.request, urllib.error
 from urllib.parse import urlparse
 
 # Deny by default: only these read methods may leave the machine.
@@ -93,7 +93,9 @@ UNKNOWN = Unknown()
 
 
 class RPCError(Exception):
-    pass
+    def __init__(self, message, http_status=None):
+        super().__init__(message)
+        self.http_status = http_status
 
 
 class BatchResult:
@@ -286,6 +288,7 @@ class RPC:
             "Content-Type": "application/json", "User-Agent": self.ua})
         delay = 1.0
         last = None
+        last_http_status = None
         deadline = time.monotonic() + self.max_total_secs
         for attempt in range(self.retries + 1):
             try:
@@ -295,10 +298,12 @@ class RPC:
                 raise
             except urllib.error.HTTPError as e:
                 last = f"HTTP {e.code}"
+                last_http_status = e.code
                 if e.code not in (429, 500, 502, 503, 504):
                     break
             except Exception as e:   # timeout, connection reset, bad JSON
                 last = f"{type(e).__name__}: {e}"
+                last_http_status = None
             if attempt < self.retries:
                 pause = delay + random.uniform(0, delay / 2)
                 if time.monotonic() + pause >= deadline:
@@ -306,7 +311,7 @@ class RPC:
                     break
                 time.sleep(pause)
                 delay *= 2
-        raise RPCError(f"{_host(url)}: {last}")
+        raise RPCError(f"{_host(url)}: {last}", http_status=last_http_status)
 
     def _verify(self, url, hard=False):
         """eth_chainId check before first use of a URL; result cached."""
@@ -338,6 +343,7 @@ class RPC:
         check_body(body)
         urls = self.urls if self.allow_fallback else self.urls[:1]
         errs = []
+        http_statuses = []
         for u in urls:
             if not self._verify(u):
                 errs.append(f"{_host(u)}: {self._verified[u]}")
@@ -348,7 +354,11 @@ class RPC:
                 if str(e).startswith("refused"):
                     raise
                 errs.append(str(e))
-        raise RPCError("all RPCs failed (tried " + ", ".join(_host(u) for u in urls) + "): " + " | ".join(errs))
+                http_statuses.append(e.http_status)
+        http_status = (http_statuses[0] if http_statuses and len(http_statuses) == len(errs)
+                       and len(set(http_statuses)) == 1 else None)
+        raise RPCError("all RPCs failed (tried " + ", ".join(_host(u) for u in urls) + "): " + " | ".join(errs),
+                       http_status=http_status)
 
     def used_label(self, url):
         return f"{self.label or 'rpc'} ({_host(url)})"
@@ -420,7 +430,9 @@ class RPC:
                     else:
                         values.append((True, o["result"]))
             except RPCError as e:
-                values += [(False, str(e))] * len(chunk)
+                err = ({"http_status": e.http_status, "message": str(e)}
+                       if e.http_status is not None else str(e))
+                values += [(False, err)] * len(chunk)
                 used.add(self.tried_label())
         return BatchResult(values, ", ".join(sorted(used)) or "none")
 
@@ -454,6 +466,8 @@ def dec_addr(h):
 
 
 def topic_addr(addr):
+    if not isinstance(addr, str) or re.fullmatch(r"0x[0-9a-fA-F]{40}", addr) is None:
+        raise ValueError("address must be exactly 20 bytes of hex (0x + 40 hex characters)")
     return "0x" + pad32(addr)
 
 

@@ -6,6 +6,13 @@
 
 - Shareable Grok Bot template v1.1.0: the rules pin the watch-only `guardian` CLI v0.4.0-rc.6 (wheel and constraints.txt by SHA-256) instead of rc.5. Red-team summary adds the rc.6 install re-test. Same public link, updated in place.
 
+### Fixed
+
+- Fail approval assertions when the checked owner differs from the simulated owner; reject malformed topic addresses and chunk sizes below 1 before RPC use.
+- Make missing or unreadable audit inputs fail, and redact unknown 64-hex findings while retaining file and line locations.
+- Tighten rate-limit error classification and require checksum-verified GitLab release assets in installation guidance, with an explicit warning against installing this toolkit from PyPI.
+- Add regression tests for these cases.
+
 ## [0.1.0] - 2026-10-17
 
 First release. Read-only: nothing in this kit holds keys, signs or broadcasts.

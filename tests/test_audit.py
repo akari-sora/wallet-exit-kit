@@ -1,3 +1,7 @@
+import builtins
+import hashlib
+
+import exitkit.audit as audit_module
 from exitkit.audit import KNOWN_64, PUBLIC, is_fake, main as audit_main
 
 
@@ -63,3 +67,64 @@ def test_forbid_substring(tmp_path, capsys):
     (tmp_path / "a.txt").write_text("alpha SECRET-MARKER omega\n", encoding="utf-8")
     assert audit_main([str(tmp_path), "--forbid", "SECRET-MARKER"]) == 1
     assert "FORBIDDEN" in capsys.readouterr().out
+
+
+def test_missing_folder_is_error(tmp_path, capsys):
+    missing = tmp_path / "missing"
+
+    assert audit_main([str(missing)]) != 0
+    out = capsys.readouterr().out
+    assert "ERROR" in out
+    assert "RESULT: PASS" not in out
+
+
+def test_unreadable_file_is_error(tmp_path, capsys, monkeypatch):
+    unreadable = tmp_path / "unreadable.txt"
+    unreadable.write_text("nothing to see\n", encoding="utf-8")
+    real_open = builtins.open
+
+    def fail_unreadable(path, *args, **kwargs):
+        if str(path) == str(unreadable):
+            raise PermissionError("permission denied")
+        return real_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(audit_module, "open", fail_unreadable, raising=False)
+    assert audit_main([str(tmp_path)]) != 0
+    out = capsys.readouterr().out
+    assert "ERROR" in out
+    assert "unreadable.txt" in out
+    assert "RESULT: PASS" not in out
+
+
+def test_unreadable_folder_is_error(tmp_path, capsys, monkeypatch):
+    unreadable = tmp_path / "unreadable"
+    unreadable.mkdir()
+    real_scandir = audit_module.os.scandir
+
+    def fail_unreadable(path):
+        if str(path) == str(unreadable):
+            raise PermissionError(13, "Permission denied", str(unreadable))
+        return real_scandir(path)
+
+    monkeypatch.setattr(audit_module.os, "scandir", fail_unreadable)
+    assert audit_main([str(tmp_path)]) != 0
+    out = capsys.readouterr().out
+    assert "ERROR" in out
+    assert "unreadable" in out
+    assert "RESULT: PASS" not in out
+
+
+def test_unknown_64_hex_is_redacted(tmp_path, capsys):
+    secret = hashlib.sha256(b"synthetic audit redaction regression").hexdigest()
+    assert secret not in KNOWN_64
+    assert not is_fake(secret)
+    (tmp_path / "secret.txt").write_text(secret + "\n0x" + secret + "\n", encoding="utf-8")
+
+    assert audit_main([str(tmp_path)]) == 1
+    out = capsys.readouterr().out
+    assert secret not in out
+    redacted = secret[:4] + "…" + secret[-4:]
+    assert f" {redacted}  [" in out
+    assert f" 0x{redacted}  [" in out
+    assert "secret.txt:1" in out
+    assert "secret.txt:2" in out

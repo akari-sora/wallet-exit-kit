@@ -23,9 +23,48 @@ from exitkit.rpc import RPC, RPCError, topic_addr
 
 SPLIT_HINTS = ("range", "too many results", "result limit", "results limit", "log limit", "exceed",
                "10000", "max results", "block range", "response size", "query returned more than")
-RATE_LIMIT_HINTS = ("429", "rate limit", "rate-limit", "ratelimit", "too many requests", "throttl",
-                    "capacity", "quota", "timeout", "timed out")   # also timeouts: never split, retry a few times
+RATE_LIMIT_CODES = (429, -32005)
+RATE_LIMIT_MESSAGES = {
+    "429 too many requests", "rate limit", "rate limit exceeded", "rate-limit exceeded",
+    "ratelimit", "request rate exceeded", "too many requests", "throttled",
+    "capacity exceeded", "quota exceeded", "limit exceeded",
+}
+TIMEOUT_HINTS = ("timeout", "timed out")
 TRUNCATION_CAPS = (1000, 5000, 10000, 20000)
+
+
+def _message(value):
+    if isinstance(value, dict):
+        value = value.get("message", "")
+    return " ".join(str(value).strip().lower().split())
+
+
+def _is_rate_limited(value):
+    if isinstance(value, dict) and (value.get("code") in RATE_LIMIT_CODES or
+                                    value.get("http_status") == 429):
+        return True
+    message = _message(value)
+    return message in RATE_LIMIT_MESSAGES
+
+
+def _is_timeout(value):
+    message = _message(value)
+    return any(hint in message for hint in TIMEOUT_HINTS)
+
+
+def _topic_address(value):
+    try:
+        topic_addr(value)
+    except (TypeError, ValueError) as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
+    return value
+
+
+def _positive_int(value):
+    parsed = int(value)
+    if parsed < 1:
+        raise argparse.ArgumentTypeError("must be at least 1")
+    return parsed
 
 
 def get_logs(rpc, from_block, to_block, address=None, topics=None, chunk=10_000, min_chunk=64,
@@ -74,7 +113,7 @@ def get_logs(rpc, from_block, to_block, address=None, topics=None, chunk=10_000,
                 continue
             err = json.dumps(val) if not isinstance(val, str) else val
             low = err.lower()
-            if any(h in low for h in RATE_LIMIT_HINTS):
+            if _is_rate_limited(val) or _is_timeout(val):
                 tries[(a, b)] = tries.get((a, b), 0) + 1
                 if tries[(a, b)] <= rate_retries and time.monotonic() + 2 ** tries[(a, b)] < t_end:
                     time.sleep(2 ** tries[(a, b)])          # back off, same range, no split
@@ -121,11 +160,11 @@ def main(argv=None):
     ap.add_argument("--chain-id", type=int, required=True, help="required: every RPC URL is checked with eth_chainId")
     ap.add_argument("--address")
     ap.add_argument("--topic0")
-    ap.add_argument("--topic1-addr")
-    ap.add_argument("--topic2-addr")
+    ap.add_argument("--topic1-addr", type=_topic_address)
+    ap.add_argument("--topic2-addr", type=_topic_address)
     ap.add_argument("--from-block", type=int, required=True)
     ap.add_argument("--to-block", default="latest")
-    ap.add_argument("--chunk", type=int, default=10_000)
+    ap.add_argument("--chunk", type=_positive_int, default=10_000)
     ap.add_argument("--batch", type=int, default=5, help="getLogs per HTTP batch; use 1 if the node rejects batches")
     ap.add_argument("--retries", type=int, default=3, help="max retries per HTTP request (429/5xx/timeout)")
     ap.add_argument("--timeout", type=float, default=20, help="seconds per HTTP request")

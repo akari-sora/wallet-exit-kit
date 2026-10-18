@@ -294,6 +294,9 @@ def check(sim, assertions):
                 # ERC-20 Approval (3 topics), ERC-721 single Approval (4 topics), ApprovalForAll,
                 # Permit2 Approval + Permit, Aave-style BorrowAllowanceDelegated. except_spenders applies to all.
                 o = _lc(a["owner"]); ok_sp = {_lc(x) for x in a.get("except_spenders", [])}; bad = []
+                if o != _lc(sim["owner"]):
+                    add(a, False, "owner mismatch: assertion owner differs from simulated owner")
+                    continue
                 for tx in sim["txs"]:
                     for lg in tx["logs"]:
                         tp = lg.get("topics") or []

@@ -149,7 +149,7 @@ def scan_hex(line, allow):
             elif is_fake(k):
                 yield pre + run[:10] + "…", "FAKE", "64-hex placeholder"
             else:
-                yield pre + run, "REVIEW", "64-hex (tx hash / key / signature?)"
+                yield pre + run[:4] + "…" + run[-4:], "REVIEW", "64-hex (tx hash / key / signature?)"
         elif n > 40:
             if is_fake(run):     # the whole run is one repeated pattern (1111…), nothing hidden
                 yield pre + run[:12] + "…", "FAKE", f"{n}-hex placeholder"
@@ -166,17 +166,26 @@ def main(argv=None):
     ap.add_argument("--allow", action="append", default=[])
     ap.add_argument("--forbid", action="append", default=[])
     a = ap.parse_args(argv)
+    if not os.path.isdir(a.folder):
+        print(f"ERROR: audit folder does not exist or is not a directory: {a.folder}")
+        return 2
     allow = dict(PUBLIC)
     allow.update({x.lower().replace("0x", ""): "user allowlist" for x in a.allow})
-    review, seen, forbidden = [], {}, []
-    for root, dirs, files in os.walk(a.folder):
+    review, seen, forbidden, errors = [], {}, [], []
+
+    def walk_error(error):
+        path = error.filename or a.folder
+        errors.append((os.path.relpath(path, a.folder), error))
+
+    for root, dirs, files in os.walk(a.folder, onerror=walk_error):
         dirs[:] = [d for d in dirs if not _skip_dir(d)]
         for fn in files:
             p = os.path.join(root, fn)
             rel = os.path.relpath(p, a.folder)
             try:
                 text = open(p, encoding="utf-8", errors="replace").read()
-            except OSError:
+            except OSError as e:
+                errors.append((rel, e))
                 continue
             lines = text.splitlines()
             hits = []
@@ -205,9 +214,11 @@ def main(argv=None):
         print(f"{kind:58s} {disp}  [{note}]  ({len(locs)}x: {', '.join(locs[:3])}{' …' if len(locs) > 3 else ''})")
     for rel, i, s in forbidden:
         print(f"FORBIDDEN substring {s!r} at {rel}:{i}")
-    ok = not review and not forbidden
+    for rel, error in errors:
+        print(f"ERROR: cannot read {rel}: {error}")
+    ok = not review and not forbidden and not errors
     print(f"RESULT: {'PASS' if ok else 'FAIL'}  unique_hits={len(seen)} review={len(review)} "
-          f"forbidden_hits={len(forbidden)}")
+          f"forbidden_hits={len(forbidden)} read_errors={len(errors)}")
     return 0 if ok else 1
 
 

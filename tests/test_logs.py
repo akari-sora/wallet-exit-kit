@@ -1,7 +1,10 @@
 import json
+import urllib.error
+
+import pytest
 
 from exitkit.logs import get_logs, main as logs_main
-from exitkit.rpc import READ_METHODS, BatchResult
+from exitkit.rpc import READ_METHODS, BatchResult, RPC
 from tests.fake_rpc import jsonrpc_err, jsonrpc_ok, routed
 
 
@@ -31,6 +34,70 @@ def test_rate_limit_does_not_split():
     assert result["failed"][0][1] == 99
     assert "rate-limited" in result["failed"][0][2]
     assert result["status"] == "INCOMPLETE"
+
+
+def test_error_text_containing_rate_limit_words_is_not_rate_limited():
+    class OtherError:
+        def batch(self, calls):
+            return BatchResult(
+                [(False, "upstream says rate limit metadata is unavailable") for _ in calls],
+                "logs (fake)",
+            )
+
+    result = get_logs(OtherError(), 0, 0, chunk=1, rate_retries=0, time_budget=30)
+    assert result["failed"] == [(0, 0, "upstream says rate limit metadata is unavailable")]
+
+
+def test_json_rpc_rate_limit_code_is_classified_without_message_matching():
+    class Rate:
+        def batch(self, calls):
+            return BatchResult(
+                [(False, {"code": -32005, "message": "provider busy"}) for _ in calls],
+                "logs (fake)",
+            )
+
+    result = get_logs(Rate(), 0, 0, chunk=1, rate_retries=0, time_budget=30)
+    assert "rate-limited" in result["failed"][0][2]
+
+
+def test_json_rpc_error_merely_mentioning_http_429_is_not_rate_limited():
+    class OtherError:
+        def batch(self, calls):
+            return BatchResult([
+                (False, {
+                    "code": -32602,
+                    "message": "parameter must not contain HTTP 429 text",
+                }) for _ in calls
+            ], "logs (fake)")
+
+    result = get_logs(OtherError(), 0, 0, chunk=1, rate_retries=0, time_budget=30)
+    assert "rate-limited" not in result["failed"][0][2]
+
+
+def test_http_429_transport_error_is_rate_limited_without_a_socket(monkeypatch):
+    class TooManyRequests:
+        def open(self, request, timeout):
+            raise urllib.error.HTTPError(
+                request.full_url, 429, "Too Many Requests", {}, None,
+            )
+
+    monkeypatch.setattr("exitkit.rpc._OPENER", TooManyRequests())
+    rpc = object.__new__(RPC)
+    rpc.urls = ["http://rpc.example"]
+    rpc.allow_fallback = False
+    rpc.allowed_hosts = None
+    rpc.label = "logs"
+    rpc.wallets = set()
+    rpc.log = []
+    rpc.sent = []
+    rpc._verified = {rpc.urls[0]: True}
+    rpc._id = 0
+    rpc.retries = 0
+    rpc.timeout = 1
+    rpc.max_total_secs = 1
+    rpc.ua = "test"
+    result = get_logs(rpc, 0, 0, chunk=1, rate_retries=0, time_budget=30)
+    assert "rate-limited" in result["failed"][0][2]
 
 
 def test_oversized_range_splits_until_it_fits():
@@ -82,6 +149,36 @@ def _logs_server(serve_rpc, logs_result):
 
     url = serve_rpc(routed({"eth_chainId": chain, "eth_getLogs": getlogs}, seen))
     return url, seen
+
+
+@pytest.mark.parametrize("address", ["0x1234", "0x" + "gg" * 20])
+def test_logs_cli_rejects_invalid_topic_address_before_rpc(monkeypatch, capsys, address):
+    def rpc_must_not_be_constructed(*args, **kwargs):
+        raise AssertionError("RPC constructed")
+
+    monkeypatch.setattr("exitkit.logs.RPC", rpc_must_not_be_constructed)
+    with pytest.raises(SystemExit) as exc:
+        logs_main([
+            "--rpc", "http://127.0.0.1:9", "--chain-id", "1",
+            "--topic1-addr", address, "--from-block", "0", "--to-block", "0",
+        ])
+    assert exc.value.code == 2
+    assert "exactly 20 bytes" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("chunk", ["0", "-1"])
+def test_logs_cli_rejects_chunk_less_than_one_before_rpc(monkeypatch, capsys, chunk):
+    def rpc_must_not_be_constructed(*args, **kwargs):
+        raise AssertionError("RPC constructed")
+
+    monkeypatch.setattr("exitkit.logs.RPC", rpc_must_not_be_constructed)
+    with pytest.raises(SystemExit) as exc:
+        logs_main([
+            "--rpc", "http://127.0.0.1:9", "--chain-id", "1",
+            "--from-block", "0", "--to-block", "0", "--chunk", chunk,
+        ])
+    assert exc.value.code == 2
+    assert "at least 1" in capsys.readouterr().err
 
 
 def test_logs_cli_gap_is_unknown_and_nonzero(serve_rpc, capsys):
