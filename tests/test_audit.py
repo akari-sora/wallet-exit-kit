@@ -233,3 +233,22 @@ def test_long_hex_in_output_paths_is_redacted(tmp_path, capsys, exists):
     out = capsys.readouterr().out
     assert secret not in out
     assert secret[:4] + "…" + secret[-4:] + " (64 hex)" in out
+
+
+AT = "@"  # split so this file does not match its own handle check
+
+
+def test_python_decorators_are_not_social_handles(tmp_path, capsys):
+    (tmp_path / "test_x.py").write_text(
+        f"{AT}pytest.mark.parametrize('a', [1])\n    {AT}property\n{AT}staticmethod\ndef f(): pass\n")
+    assert audit_main([str(tmp_path)]) == 0
+    assert "social handle" not in capsys.readouterr().out
+
+
+def test_handles_in_python_comments_and_docs_are_still_review(tmp_path, capsys):
+    (tmp_path / "x.py").write_text(f"# ask {AT}alice_dev about this\n")
+    (tmp_path / "notes.md").write_text(f"{AT}pytest\n")
+    assert audit_main([str(tmp_path)]) != 0
+    out = capsys.readouterr().out
+    assert AT + "alice_dev" in out
+    assert "notes.md" in out

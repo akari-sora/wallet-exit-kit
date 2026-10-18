@@ -95,6 +95,11 @@ OTHER = [
 ]
 
 
+def _is_python_decorator(rel, line, m):
+    """A Python decorator line (at-sign + name at the start of a .py line) is not a social handle."""
+    return rel.endswith(".py") and not line[:m.start()].strip() and line[m.end():m.end() + 1] in (".", "(", "")
+
+
 def is_fake(h):
     h = h.lower()
     for n in (1, 2, 4, 8):          # repeated short pattern: 1111…, abab…, abcd…, 12345678…
@@ -225,6 +230,8 @@ def main(argv=None):
                     hits.append((i, disp, kind, note))
                 for label, rx in OTHER:
                     for m in rx.finditer(line):
+                        if label == "social handle" and _is_python_decorator(rel, line, m):
+                            continue
                         hits.append((i, m.group(0), "REVIEW", label))
             # split-across-lines pass: a line ending in a 20-39 hex run + next line starting with hex
             for i in range(len(lines) - 1):
