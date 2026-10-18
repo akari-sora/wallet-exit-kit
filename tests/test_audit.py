@@ -262,3 +262,15 @@ def test_multiline_decorator_is_skipped_but_docstring_handle_is_review(tmp_path,
     (tmp_path / "doc.py").write_text(f'"""Contact:\n{AT}alice_dev\n"""\nx = 1\n')
     assert audit_main([str(tmp_path)]) != 0
     assert AT + "alice_dev" in capsys.readouterr().out
+
+
+def test_docstring_handle_before_a_class_like_line_is_review(tmp_path, capsys):
+    (tmp_path / "doc2.py").write_text(f'"""Contact:\n{AT}alice_dev\nclass of 2026\n"""\n')
+    assert audit_main([str(tmp_path)]) != 0
+    assert AT + "alice_dev" in capsys.readouterr().out
+
+
+def test_unparsable_python_keeps_handles_as_review(tmp_path, capsys):
+    (tmp_path / "broken.py").write_text(f"{AT}alice_dev\ndef f(:\n")
+    assert audit_main([str(tmp_path)]) != 0
+    assert AT + "alice_dev" in capsys.readouterr().out

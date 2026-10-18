@@ -26,7 +26,7 @@ The walk skips __pycache__ and checkout tooling directories (.git, .venv, .omc,
 caches, dist, build, *.egg-info). Files that are read use the same classification
 rules as before.
 """
-import argparse, os, re, sys
+import argparse, io, os, re, sys, tokenize
 
 # Tooling and VCS trees are not project source. A checkout is scanned after
 # `python3 -m venv .venv`, and local agent state may hold machine paths.
@@ -95,22 +95,29 @@ OTHER = [
 ]
 
 
-def _is_python_decorator(rel, lines, idx, m):
-    """A Python decorator (at-sign + name starting a .py line, applied to a def or class) is not a social handle."""
-    line = lines[idx]
-    if not rel.endswith(".py") or line[:m.start()].strip() or line[m.end():m.end() + 1] not in (".", "(", ""):
-        return False
-    depth = line.count("(") - line.count(")")
-    for nxt in lines[idx + 1:idx + 60]:
-        stripped = nxt.strip()
-        if depth > 0:
-            depth += nxt.count("(") - nxt.count(")")
-            continue
-        if not stripped or stripped.startswith("@"):
-            depth += nxt.count("(") - nxt.count(")")
-            continue
-        return stripped.startswith(("def ", "async def ", "class "))
-    return False
+def _python_decorator_lines(rel, text):
+    """Line numbers where a real decorator starts, found with the tokenizer so strings and docstrings never count."""
+    if not rel.endswith(".py"):
+        return set()
+    found, line_start = set(), True
+    try:
+        for tok in tokenize.generate_tokens(io.StringIO(text).readline):
+            if tok.type in (tokenize.NEWLINE, tokenize.NL):
+                line_start = True
+                continue
+            if tok.type in (tokenize.INDENT, tokenize.DEDENT, tokenize.COMMENT):
+                continue
+            if line_start and tok.type == tokenize.OP and tok.string == "@":
+                found.add(tok.start[0])
+            line_start = False
+    except (tokenize.TokenError, SyntaxError):
+        return set()
+    return found
+
+
+def _is_python_decorator(decorator_lines, lineno, line, m):
+    """A social-handle match that is the decorator token at the start of a decorator line."""
+    return lineno in decorator_lines and not line[:m.start()].strip()
 
 
 def is_fake(h):
@@ -234,6 +241,7 @@ def main(argv=None):
                 errors.append((rel, e))
                 continue
             lines = text.splitlines()
+            decorators = _python_decorator_lines(rel, text)
             hits = []
             for i, line in enumerate(lines, 1):
                 for s in a.forbid:
@@ -243,7 +251,7 @@ def main(argv=None):
                     hits.append((i, disp, kind, note))
                 for label, rx in OTHER:
                     for m in rx.finditer(line):
-                        if label == "social handle" and _is_python_decorator(rel, lines, i - 1, m):
+                        if label == "social handle" and _is_python_decorator(decorators, i, line, m):
                             continue
                         hits.append((i, m.group(0), "REVIEW", label))
             # split-across-lines pass: a line ending in a 20-39 hex run + next line starting with hex
