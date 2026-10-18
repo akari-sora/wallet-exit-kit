@@ -72,6 +72,8 @@ KNOWN_64 = {  # public keccak constants (references/07) and published release fi
     # published release file hashes (gitlab.com/aa22396584/wallet-guardian/-/releases/v0.4.0-rc.5 SHA256SUMS)
     "655b601f14c422e7b5ad14b0a8200dde72c0dc1df1d32f0ec98eec48c9a829ef": "wallet-guardian 0.4.0rc5 wheel sha256",
     "06ae47cfca5995ad8847e8436435ba6ca0373b49f8f3af46dbc1224dbdfae80e": "wallet-guardian 0.4.0rc5 constraints.txt sha256",
+    # gitlab.com/aa22396584/wallet-guardian/-/releases/v0.4.0-rc.6 SHA256SUMS (constraints.txt is unchanged from rc.5)
+    "4dcced22d13a3f375c89e78ebfd1b1ac3e0aff71b4646aa510a074b63a2fb368": "wallet-guardian 0.4.0rc6 wheel sha256",
     "7e644d79422f17c01e4894b5f4f588d331ebfa28653d42ae832dc59e38c9798f": "AdminChanged",
     "360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc": "EIP-1967 implementation slot",
     "b53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103": "EIP-1967 admin slot",
