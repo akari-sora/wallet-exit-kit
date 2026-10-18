@@ -8,14 +8,14 @@ What it finds (each hit is PUBLIC / FAKE / REVIEW):
 - Boundary rule: an allowlisted / public / fake address only counts as such when no hex char is
   directly before (or before its 0x) or after it; otherwise the whole combined run is REVIEW.
 - 64-hex strings (tx hash, private key, signature part): allowed only if in KNOWN_64 (public
-  event topics / storage slots listed in references/07, and published release file hashes)
-  or an obvious placeholder.
+  event topics / storage slots listed in references/07, and published release file hashes),
+  an obvious placeholder, or a verified file hash in a SHA256SUMS file (see below).
 - Other hex runs longer than 40 that are not 64: REVIEW (may hide an address).
 - Non-EVM / identity formats: Bitcoin bech32 (bc1…), TRON (T…), base58 (Solana/BTC legacy),
   ENS names (*.eth), email, social handles (at-sign + name), home/internal paths. A short list of
   exact public strings (KNOWN_TEXT, PLATFORM_PATHS) is PUBLIC instead of REVIEW. In a file named
-  SHA256SUMS, a 64-hex value is PUBLIC only when the file it lists (same folder, not a symlink)
-  really has that SHA-256.
+  SHA256SUMS, a 64-hex value is PUBLIC only when the file it lists (in the same folder or below,
+  not a symlink, no path escape) really has that SHA-256.
 
 Limits: heuristics only. It cannot recognise private labels, balances, people's names written
 in prose, or screenshots. A PASS means "no pattern above was found", not "no private data".

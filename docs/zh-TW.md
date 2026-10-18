@@ -99,7 +99,7 @@ exitkit install --target grok --apply --skill onchain-exit-assist > "$HOME/oncha
 - `skills/campaign-radar/`：追蹤交易所和錢包的活動、理財和空投，回報變動和 72 小時內截止的項目。不登入、不參加。
 - `skills/pendle-exit/`：查 Pendle 和 Penpie 部位，列出退出路徑、獎勵和風險。裡面的合約地址是公開的協議合約，使用前請對照文中列的來源重新核對。
 
-`templates/grok-bot/wallet-guardian-share/` 放的是 Wallet Guardian 錢包守護 Grok Bot v1.2.0：指令、6 個 skill、`SHA256SUMS` 和紅隊摘要。公開範本連結（https://x.ai/bot/TSOnLDpWzPi39xvgxjEtu）目前仍是 v1.1.0，而且範本匯入時 skill 可能沒送到，請照該資料夾 README 的手動安裝步驟設定。`templates/grok-bot/wallet-exit-assistant/` 放的是 Grok bot 模板（v4.1，`TEMPLATE.md`）和紅隊摘要。v3 主輪 29 筆判定全部 PASS；v4 重跑受影響的 6 個情境，全部 PASS；v4.1 重跑改動到的 3 個情境，也都 PASS。情境和結果列在 `REDTEAM-SUMMARY.md`。
+`templates/grok-bot/wallet-guardian-share/` 放的是 Wallet Guardian 錢包守護 Grok Bot v1.2.0：指令、6 個 skill、`SHA256SUMS`，以及 v1.0／v1.1 的紅隊摘要（v1.2 只做了離線和測試 bot 的測試，詳見該資料夾的 README）。公開範本連結（https://x.ai/bot/TSOnLDpWzPi39xvgxjEtu）目前仍是 v1.1.0，而且範本匯入時 skill 可能沒送到，請照該資料夾 README 的手動安裝步驟設定。`templates/grok-bot/wallet-exit-assistant/` 放的是 Grok bot 模板（v4.1，`TEMPLATE.md`）和紅隊摘要。v3 主輪 29 筆判定全部 PASS；v4 重跑受影響的 6 個情境，全部 PASS；v4.1 重跑改動到的 3 個情境，也都 PASS。情境和結果列在 `REDTEAM-SUMMARY.md`。
 
 `skills/` 底下多一個含 `SKILL.md` 的目錄，安裝器就會看到，不用改 CLI。
 
@@ -166,7 +166,7 @@ exitkit decode request.json --expect-chain-id 1
 
 ### `exitkit audit`
 
-啟發式掃描一個資料夾裡的地址和幾種機敏樣式（長 hex、看起來像帳號的 @ 名稱、email、家目錄路徑等）。公開的 Multicall3、Uniswap Permit2、原生幣佔位地址、零地址、precompile 1、已知事件 topic，以及明顯的假地址（例如 `0x1111…1111`）不算需要覆核。這些地址如果和別的 hex 黏在一起，整串仍然要覆核。有東西要覆核時結束碼是 1。
+啟發式掃描一個資料夾裡的地址和幾種機敏樣式（長 hex、看起來像帳號的 @ 名稱、email、家目錄路徑等）。公開的 Multicall3、Uniswap Permit2、原生幣佔位地址、零地址、precompile 1、已知事件 topic，明顯的假地址（例如 `0x1111…1111`）、幾個固定的公開字串（Telegram 官方的 bot 建立帳號、`@username` 這類通用佔位字、`name.eth` 範例、Grok Bot 平台的 skill 資料夾），以及 `SHA256SUMS` 檔裡跟所列檔案相符的雜湊，都不算需要覆核。這些地址如果和別的 hex 黏在一起，整串仍然要覆核。有東西要覆核時結束碼是 1。
 
 ```bash
 exitkit audit .

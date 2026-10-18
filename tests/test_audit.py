@@ -327,6 +327,11 @@ def test_known_public_text_and_platform_path_pass(tmp_path, capsys):
     '"/ho' 'me/box/agent-data/.."',
     "/ho" "me/box/agent-data/x/..",
     "/ho" "me/box/agent-data/.",
+    f"{AT}handle.alice",
+    f"{AT}username.bob_smith",
+    f"{AT}BotFather.real",
+    f"{AT}username/alice",
+    "name" ".eth.alice",
 ])
 def test_near_misses_of_public_text_stay_review(tmp_path, capsys, text):
     (tmp_path / "x.md").write_text(text + "\n")
@@ -347,7 +352,14 @@ def test_sha256sums_with_matching_file_hash_passes(tmp_path, capsys):
     assert "verified file hash" in capsys.readouterr().out
 
 
-@pytest.mark.parametrize("make", ["wrong_hash", "escape", "other_file", "symlink", "missing"])
+def test_sha256sums_uppercase_hash_is_verified(tmp_path, capsys):
+    digest = _sums_case(tmp_path)
+    (tmp_path / "SHA256SUMS").write_text(f"{digest.upper()}  skills/a.md\n")
+    assert audit_main([str(tmp_path)]) == 0
+    assert "verified file hash" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("make", ["wrong_hash", "escape", "other_file", "symlink", "missing", "absolute"])
 def test_sha256sums_hash_that_cannot_be_verified_stays_review(tmp_path, capsys, make):
     digest = _sums_case(tmp_path)
     if make == "wrong_hash":
@@ -361,6 +373,8 @@ def test_sha256sums_hash_that_cannot_be_verified_stays_review(tmp_path, capsys, 
     elif make == "symlink":
         (tmp_path / "link.md").symlink_to(tmp_path / "skills" / "a.md")
         (tmp_path / "SHA256SUMS").write_text(f"{digest}  link.md\n")
+    elif make == "absolute":
+        (tmp_path / "SHA256SUMS").write_text(f"{digest}  {tmp_path / 'skills' / 'a.md'}\n")
     else:
         (tmp_path / "SHA256SUMS").write_text(f"{digest}  skills/gone.md\n")
     assert audit_main([str(tmp_path)]) != 0
