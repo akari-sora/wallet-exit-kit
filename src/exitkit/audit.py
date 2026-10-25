@@ -59,6 +59,8 @@ PUBLIC = {
     "4eee13b0fc9fa1a59ac3ea5f4900da3bbe31abf8": "Penpie PRT (Arbitrum)",
     "8ce523cf1120d9b7703806c745b69663a2847504": "Penpie penpieBribeRewardDistributor (Arbitrum)",
     "888888888889758f76e7103c6cbf23abbf58f946": "Pendle RouterV4",
+    # not an address: the public wallet-exit-kit commit that wallet-guardian-notify v1.3 pins wg_notify.py to
+    "fd94656c155aac652a35127cdf3bbe1d9781825e": "wallet-exit-kit commit (wallet-guardian-notify v1.3 wg_notify.py pin)",
 }
 KNOWN_64 = {  # public keccak constants (references/07) and published release file hashes
     "ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef": "Transfer",
@@ -83,6 +85,9 @@ KNOWN_64 = {  # public keccak constants (references/07) and published release fi
     "360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc": "EIP-1967 implementation slot",
     "b53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103": "EIP-1967 admin slot",
     "a3f0ad74e5423aebfd80d3ef4346578335a9a72aeaee59ff6cb3582b35133d50": "EIP-1967 beacon slot",
+    # templates/grok-bot/wallet-guardian-share v1.3 (public pins, not secrets)
+    "2c2b87bb267435d3c3c4e3ca9a1dff06aae6f38bd3285f62214d86096567ad78": "wallet-guardian-share wg_notify.py sha256 (notify pin)",
+    "1364ad8f4ddc23411539391afc4f71d32318940334609b658e2b77dd633a65fc": "wallet-guardian-share v1.3 instructions template sha256 (TEMPLATE_SHA)",
 }
 HEX_RUN = re.compile(r"(0[xX])?([0-9a-fA-F]{20,})")
 OTHER = [
